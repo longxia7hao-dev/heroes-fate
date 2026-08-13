@@ -87,7 +87,11 @@ def main() -> None:
     ap.add_argument("--start", type=float, default=0.0, help="從第幾秒開始取")
     ap.add_argument("--length", type=float, default=0.0, help="取幾秒（0＝到結尾）")
     ap.add_argument("--target-db", type=float, default=-16.5)
-    ap.add_argument("--crossfade", type=float, default=2.0)
+    ap.add_argument("--crossfade", type=float, default=2.0,
+                    help="無縫循環的重疊秒數；一次性音效請給 0")
+    ap.add_argument("--fade-out", type=float, default=0.0,
+                    help="結尾淡出秒數。一次性音效（例如勝利號）用得到 —— "
+                         "從樂句中間切斷會很突兀，循環用的曲子則不需要")
     ap.add_argument("--bitrate", type=int, default=112)
     args = ap.parse_args()
 
@@ -100,6 +104,9 @@ def main() -> None:
 
     before_db = dbfs(audio)
     audio = seamless_loop(audio, sr, args.crossfade)
+    if args.fade_out > 0:
+        f = min(len(audio), int(args.fade_out * sr))
+        audio[-f:] *= np.linspace(1.0, 0.0, f)[:, None]
     audio = normalize(audio, args.target_db)
 
     out = Path(args.out)
