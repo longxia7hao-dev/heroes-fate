@@ -1626,10 +1626,9 @@
     prefetchFinalClip(wh?.id);
     bg.style.backgroundImage = "url(assets/bg_battle_arena_v2.jpg)";
     cine.classList.add("show");
-    // 開場到降臨這一段用睿哥給的降臨曲，全軍突擊時才交棒給討伐曲。
-    // 在 ACT 1 之前就切，是為了少一次交叉淡化 —— 集結只有 0.5 秒，
-    // 如果等到 ACT 2 才換，8 秒內會連換三次音樂，聽起來很churn。
-    window.HF_Audio?.playRaidMusic?.("bossArrival");
+    // 音樂：整場魔王討伐就是 setScene("play") 的討伐曲一首到底，中途不換。
+    // 曾經在降臨段插一首專屬曲，但降臨只有 6 秒，「音樂剛出來就被切掉」，
+    // 睿哥要求拿掉（2026-08-14）。要再加中途換曲前先想清楚段落有多長。
 
     // === ACT 1: the party enters as a deliberate HUD, not tiny combat blocks. ===
     setAct("gather");
@@ -1687,8 +1686,6 @@
     if (!state.skip) {
       setAct("clash");
       renderBattleHud(players);
-      // 英雄開始反擊 → 換上討伐曲
-      window.HF_Audio?.playRaidMusic?.("battle");
       setBanner("命運之輪 · 全軍突擊！");
       audioCue("battle.clash", { group: "presentation" });
       await playStageClip(video, "assets/ref_battle_mobile.mp4", 1500 * fast);
