@@ -22,6 +22,8 @@
   /** 影片播放倍率：略快但動作仍自然 */
   const CLIP_RATE = 1.3;
   const PICK_CONFIRM_MAX_MS = 4200; // 3.04s 鎖定片以 1× 完整播放，另留載入／收尾緩衝
+  /** 降臨影片播到這一刻下魔王吼聲（片長 6.04s，吼聲 2.2s，剛好收在片尾前） */
+  const BOSS_ROAR_CUE_MS = 3400;
 
   const state = {
     count: 4,
@@ -1001,6 +1003,9 @@
       try { video.currentTime = 0; } catch (_) {}
       video.classList.add("show");
       try { video.play()?.catch?.(() => {}); } catch (_) {}
+      // 聲音要對得上畫面，就得從「真的開播」這一刻起算 —— 4G 上載入可能等好幾秒，
+      // 在 await 之前就下音效會變成「聲音先響、畫面幾秒後才來」。
+      try { opts.onPlay?.(); } catch (_) {}
       // untilEnded：等 ended 事件而不是硬等固定秒數，播多久就是多久，
       // 起播晚了也不會被攔腰切掉（durationMs 此時只當保險上限）。
       if (opts.untilEnded) await waitClipEnd(video, Math.max(600, durationMs | 0));
@@ -1635,8 +1640,12 @@
     setAct("arrival");
     stage.classList.add("dark");
     setBanner(isDoom ? "魔王降臨——它要挑一個人帶走" : "魔王降臨！！");
-    audioCue("boss.enter", { group: "presentation" });
-    await playStageClip(
+    // 降臨片本身沒有音軌（Sora 匯出的都沒有），整段的聲音全靠這兩個音效。
+    // 原本 boss.enter 在影片載入前就下、boss.roar 排在整支播完之後，
+    // 結果是「重音對著還沒出現的畫面響，吼聲響在全軍突擊上面」，
+    // 中間 6 秒的降臨反而是全靜音。改成兩個都跟著影片走。
+    let roarTimer = 0;
+    const arrivalPlayed = await playStageClip(
       video,
       "assets/videos/mobile/boss/arrival.mp4",
       9000 * fast,
@@ -1644,9 +1653,29 @@
         poster: artUrl("assets/videos/poster/boss/arrival.jpg"),
         readyMs: 8000,
         untilEnded: true,
+        onPlay: () => {
+          // 第一幀＝降臨重音
+          audioCue("boss.enter", { group: "presentation" });
+          // 魔王走到鏡頭前才吼。影片 6.04s、吼聲 2.2s，3.4s 下去剛好收在片尾之前。
+          // 這裡不乘 fast：stage clip 一律 1× 播放，乘了反而對不上。
+          roarTimer = setTimeout(() => {
+            roarTimer = 0;
+            if (!state.skip) audioCue("boss.roar", { group: "presentation" });
+          }, BOSS_ROAR_CUE_MS);
+        },
       }
     );
-    audioCue("boss.roar", { group: "presentation", volume: 0.72 });
+    // 影片比預期短（載不動、被跳過）時 roarTimer 還沒燒到，這裡補吼一聲 ——
+    // 不補的話「魔王降臨卻完全沒聲音」會再發生一次。
+    if (roarTimer) {
+      clearTimeout(roarTimer);
+      roarTimer = 0;
+      if (!state.skip) audioCue("boss.roar", { group: "presentation" });
+    } else if (!arrivalPlayed && !state.skip) {
+      // 連播都沒播成：重音與吼聲都還沒下過，兩個都補
+      audioCue("boss.enter", { group: "presentation" });
+      audioCue("boss.roar", { group: "presentation" });
+    }
 
     const attackSources = await attackSourcesPromise;
 
