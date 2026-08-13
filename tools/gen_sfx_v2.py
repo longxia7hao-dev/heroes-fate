@@ -180,15 +180,22 @@ def ui_click() -> np.ndarray:
 
 
 def ui_lock() -> np.ndarray:
-    """金屬扣環鎖上：低沉的 thunk + 金屬共振尾。"""
-    metal = modal(0.55, [317, 611, 1042, 1523, 2411, 3719],
-                  [0.22, 0.16, 0.11, 0.075, 0.05, 0.03],
-                  [1.0, 0.66, 0.44, 0.3, 0.18, 0.1])
-    t = np.arange(n_of(0.55)) / SR
-    thunk = np.sin(2 * np.pi * np.cumsum(118 * np.exp(-16 * t)) / SR) * env_ad(0.55, 0.001, 0.07, 3.0)
-    grit = sos_filter(noise(0.55), "bandpass", 1900, 0.8) * env_ad(0.55, 0.0005, 0.02, 6.0)
-    mix = saturate(0.85 * metal + 0.7 * thunk + 0.35 * grit, 1.6)
-    return finish(reverb(mix, "room", 0.26), 0.8)
+    """木扣扣合（睿哥從四個方案選的 A）。
+
+    第一版是金屬扣環，金屬共振衰減到 220ms，變成拖尾的「噹」——睿哥回
+    「不好聽」。這顆聲音**不只「決定」在用**：選模式、命運排序揭曉、分組
+    揭曉都是同一顆（見 audioDirector 的 pick.lock／mode.select／order.rank／
+    team.reveal），一場下來會聽很多次，拖尾越聽越煩。
+
+    改成木頭共振：時長 0.55s→0.30s，最長衰減 220ms→55ms，泛音只留四段
+    且全在 1.2kHz 以下，完全沒有金屬尾。
+    """
+    body = modal(0.30, [196, 431, 742, 1180], [0.055, 0.034, 0.020, 0.012],
+                 [1.0, 0.55, 0.28, 0.14])
+    t = np.arange(n_of(0.30)) / SR
+    thunk = np.sin(2 * np.pi * np.cumsum(104 * np.exp(-20 * t)) / SR) * env_ad(0.30, 0.001, 0.055, 3.4)
+    tick = sos_filter(noise(0.30), "bandpass", 2200, 0.9) * env_ad(0.30, 0.0006, 0.010, 6.0)
+    return finish(reverb(saturate(0.9 * body + 0.85 * thunk + 0.28 * tick, 1.5), "room", 0.18), 0.78)
 
 
 def ui_whoosh() -> np.ndarray:

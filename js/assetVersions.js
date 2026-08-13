@@ -200,7 +200,7 @@ window.HF_ASSET_V = {
 "assets/audio/sfx/reveal_chime.mp3":"ea40c6de1d",
 "assets/audio/sfx/smoke_burst.mp3":"a1e6e0c7f3",
 "assets/audio/sfx/ui_click.mp3":"4155ed4255",
-"assets/audio/sfx/ui_lock.mp3":"9168645a0c",
+"assets/audio/sfx/ui_lock.mp3":"a8e0ba0a01",
 "assets/audio/sfx/ui_whoosh.mp3":"49fb2a81fc",
 "assets/audio/sfx/victory_fanfare.mp3":"54833b8221",
 "assets/audio/sfx/wheel_hit.mp3":"d9e114f45c",
