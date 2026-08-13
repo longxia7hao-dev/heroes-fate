@@ -1,0 +1,270 @@
+/**
+ * ornate.css —— 依睿哥 2026-08-14 給的五張視覺稿做的介面提升層。
+ *
+ * 為什麼另開一個檔而不是改 revamp.css：revamp.css 有 2600 行、大量
+ * `#screen-x .y` 的 ID 選擇器，直接改容易改壞既有版面。這層只**疊在最後**，
+ * 專門處理稿子裡那套視覺語言，要退版只要把 index.html 那行 <link> 拿掉。
+ *
+ * 稿子的視覺語言歸納成四件事：
+ *   1. **金色雙線框 + 四角菱形飾釘**（面板、模式卡）
+ *   2. **金屬質感的金色主按鈕**（有斜面、裂紋、強光暈）
+ *   3. **紫色發光的次要按鈕**（不是原本的線框）
+ *   4. **金色漸層標題**（帶暗色描邊，壓在亮背景上也讀得到）
+ *
+ * 因為載入順序在最後，選擇器只要與 revamp.css **同強度**即可覆蓋；
+ * 對到 ID 規則的地方也用 ID，不用 !important 硬壓。
+ */
+
+:root {
+  --au-hi: #ffeec2;
+  --au: #e9c477;
+  --au-mid: #c9973f;
+  --au-lo: #8a6220;
+  --au-line: rgba(233, 196, 119, 0.8);
+  --au-glow: rgba(255, 205, 110, 0.34);
+  --vio-hi: #a97bff;
+  --vio: #5a2fa8;
+  --vio-lo: #2a1252;
+  --ink-panel: rgba(20, 9, 42, 0.9);
+}
+
+/* 四角菱形飾釘。用一張 SVG 貼四個角，比四個 DOM 元素乾淨，
+   而且面板圓角改變時不用跟著調位置。 */
+.ornate-corners {
+  --corner: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14'><path d='M7 0 L14 7 L7 14 L0 7 Z' fill='%23e9c477'/><path d='M7 3.2 L10.8 7 L7 10.8 L3.2 7 Z' fill='%23fff3d0'/></svg>");
+  background-image: var(--corner), var(--corner), var(--corner), var(--corner);
+  background-repeat: no-repeat;
+  background-position:
+    left 9px top 9px, right 9px top 9px,
+    left 9px bottom 9px, right 9px bottom 9px;
+  background-size: 14px 14px;
+}
+
+/* 金色雙線框：外框一條、內側再退 6px 一條細的，中間留出金屬感 */
+.ornate-frame {
+  position: relative;
+  border: 2px solid var(--au-line);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.55),
+    0 0 26px var(--au-glow),
+    inset 0 0 34px rgba(74, 32, 128, 0.5);
+}
+.ornate-frame::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1px solid rgba(233, 196, 119, 0.34);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* ── 面板 ─────────────────────────────────────────────────────────── */
+
+#screen-home .home-panel,
+#screen-count .card.panel,
+#screen-mode .card.panel {
+  border: 2px solid var(--au-line);
+  border-radius: 18px;
+  /* background-color 必須單獨給：下面的 background-image 會蓋掉簡寫設的底色，
+     少了它面板是透明的，backdrop-filter 會把背後的光斑糊成一顆怪圓。 */
+  background-color: #17092f;
+  /* 面板已接近不透明，模糊只剩副作用 */
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  /**
+   * 底部兩顆飾釘用背景圖補。**上面兩顆不要碰** —— revamp.css 的
+   * `:is(.card, .panel)::before/::after` 就是它們（`content: "◆"` 的圓形徽記，
+   * 稿子裡也有）。把 ::after 拿去畫別的東西，右上那顆就會變成一坨深色方塊。
+   */
+  --medal: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22'><circle cx='11' cy='11' r='9.6' fill='%2321103d' stroke='%23ffdfa0' stroke-width='1'/><path d='M11 7.2 L14.8 11 L11 14.8 L7.2 11 Z' fill='%23e9c477'/></svg>");
+  background-image:
+    var(--medal), var(--medal),
+    linear-gradient(180deg, rgba(46, 20, 92, 0.94), rgba(16, 7, 36, 0.96));
+  background-repeat: no-repeat;
+  background-position: left 9px bottom 9px, right 9px bottom 9px, center;
+  background-size: 22px 22px, 22px 22px, cover;
+  /**
+   * 內框線用 outline + 負的 outline-offset。
+   * 這比 inset box-shadow 好：不會用不透明色蓋掉底下的漸層，
+   * 也不必動 ::before／::after（那兩個在這個專案裡都另有用途）。
+   */
+  outline: 1px solid rgba(233, 196, 119, 0.3);
+  outline-offset: -6px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 235, 190, 0.22),
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 0 30px var(--au-glow),
+    inset 0 0 40px rgba(74, 32, 128, 0.42);
+  /* 底部飾釘要有地方站，不然會被最下面那排按鈕壓住 */
+  padding-bottom: 1.5rem;
+}
+
+/* 背景那群 Q 版英雄是主角，別再壓那麼暗（稿子裡他們很清楚） */
+#screen-home .home-bg {
+  filter: saturate(1.06) brightness(1.1);
+}
+#screen-home .home-bg::after {
+  background: linear-gradient(180deg, rgba(8, 3, 20, 0.12) 0%, rgba(8, 3, 20, 0.62) 62%, rgba(8, 3, 20, 0.92) 100%);
+}
+
+/* ── 標題：金色漸層 + 暗描邊 ──────────────────────────────────────── */
+
+#screen-count .card.panel h2,
+#screen-mode .card.panel h2,
+#screen-pick .pick-header-text h2 {
+  background: linear-gradient(178deg, #fff6dc 4%, var(--au) 42%, var(--au-mid) 70%, #f3dda6 96%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* 不要加 -webkit-text-stroke：它跟 background-clip:text ＋ drop-shadow
+     疊在一起會在字緣糊出一圈重影，中文筆畫多的字尤其明顯。 */
+  filter: drop-shadow(0 1.5px 0 rgba(48, 22, 4, 0.6)) drop-shadow(0 0 12px rgba(255, 200, 96, 0.26));
+  letter-spacing: 0.05em;
+}
+
+/* STEP 標籤：稿子是青色小字 */
+.step-kicker {
+  color: #7fdcf0;
+  text-shadow: 0 0 12px rgba(90, 210, 240, 0.4);
+  letter-spacing: 0.24em;
+}
+
+/* ── 按鈕 ─────────────────────────────────────────────────────────── */
+
+:is(#screen-home, #screen-count, #screen-pick, #screen-mode, #screen-result, #modal-settings) .btn.primary {
+  border: 1.5px solid #6a4712;
+  border-radius: 12px;
+  color: #3a2103;
+  text-shadow: 0 1px 0 rgba(255, 246, 220, 0.55);
+  background:
+    /* 裂紋：兩道極淡的斜線，讓金面不是一片死板的漸層 */
+    repeating-linear-gradient(114deg, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 26px),
+    repeating-linear-gradient(64deg, rgba(90, 55, 10, 0.07) 0 1px, transparent 1px 34px),
+    linear-gradient(180deg, #ffeec2 0%, var(--au) 30%, var(--au-mid) 58%, #e6c179 82%, #fff0c8 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 252, 236, 0.9),
+    inset 0 -2px 5px rgba(96, 58, 10, 0.42),
+    0 0 0 1px rgba(0, 0, 0, 0.45),
+    0 4px 14px rgba(0, 0, 0, 0.45),
+    0 0 26px rgba(255, 199, 92, 0.42);
+}
+.btn.primary small,
+.btn.primary .m-cta {
+  color: #5b3708;
+  text-shadow: none;
+}
+:is(#screen-home, #screen-count, #screen-pick, #screen-mode, #screen-result) .btn.primary:active {
+  box-shadow:
+    inset 0 2px 6px rgba(96, 58, 10, 0.5),
+    0 0 0 1px rgba(0, 0, 0, 0.45),
+    0 0 18px rgba(255, 199, 92, 0.3);
+}
+
+:is(#screen-home, #screen-count, #screen-pick, #screen-mode, #screen-result, #modal-settings) .btn.ghost {
+  border: 1.5px solid rgba(169, 123, 255, 0.75);
+  border-radius: 12px;
+  color: #f0e6ff;
+  background: linear-gradient(180deg, #4d2694 0%, #34186b 52%, #24104c 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(214, 186, 255, 0.4),
+    inset 0 -2px 6px rgba(10, 3, 26, 0.55),
+    0 3px 12px rgba(0, 0, 0, 0.42),
+    0 0 20px rgba(139, 92, 246, 0.3);
+  text-shadow: 0 1px 2px rgba(8, 2, 20, 0.7);
+}
+:is(#screen-home, #screen-count, #screen-pick, #screen-mode, #screen-result) .btn.ghost:active {
+  box-shadow:
+    inset 0 2px 7px rgba(10, 3, 26, 0.6),
+    0 0 14px rgba(139, 92, 246, 0.22);
+}
+:is(#screen-home, #screen-count, #screen-pick, #screen-mode, #screen-result) .btn.ghost:disabled {
+  opacity: 0.42;
+  box-shadow: none;
+}
+
+/* 人數的 −／＋ 圓鈕跟著同一套紫色 */
+:is(#screen-count) .btn.round {
+  border: 1.5px solid rgba(169, 123, 255, 0.7);
+  background: linear-gradient(180deg, #4d2694, #2a1252);
+  color: #f4ecff;
+  box-shadow:
+    inset 0 1px 0 rgba(214, 186, 255, 0.35),
+    0 3px 10px rgba(0, 0, 0, 0.4),
+    0 0 16px rgba(139, 92, 246, 0.26);
+}
+
+/* 人數數字：稿子是金色大字 */
+.count-num {
+  background: linear-gradient(180deg, #fff6dc, var(--au) 45%, var(--au-mid));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 0 rgba(40, 18, 4, 0.5)) drop-shadow(0 0 16px rgba(255, 200, 96, 0.34));
+}
+
+/* ── 模式卡：金框 + 飾釘 + 徽章外環 ──────────────────────────────── */
+
+/**
+ * ⚠️ 模式卡的 ::before 是美術圖、::after 是壓在圖上的遮罩＋左側色條。
+ * 兩個都不能拿來畫框 —— 動了 ::after 卡片文字就會糊到看不清。
+ * 內框線一律走 outline。
+ */
+#screen-mode .mode-card,
+#screen-mode .mode-card-teams {
+  border: 1.5px solid rgba(233, 196, 119, 0.6);
+  outline: 1px solid rgba(233, 196, 119, 0.22);
+  outline-offset: -5px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 235, 190, 0.16),
+    0 4px 16px rgba(0, 0, 0, 0.4),
+    0 0 18px rgba(255, 199, 92, 0.12);
+}
+#screen-mode .mode-card .m-title {
+  background: linear-gradient(178deg, #fff6dc 6%, var(--au) 46%, var(--au-mid) 92%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 1.5px 0 rgba(40, 18, 4, 0.55));
+}
+/* 徽章外環：稿子是一圈細環，四個方位各一顆小菱點 */
+#screen-mode .mode-card .m-ico {
+  position: relative;
+  border: 1px solid rgba(233, 196, 119, 0.55);
+  box-shadow:
+    0 0 0 4px rgba(12, 5, 28, 0.75),
+    0 0 0 5px rgba(233, 196, 119, 0.3),
+    0 0 18px rgba(255, 199, 92, 0.22);
+}
+
+/* ── 選角頁 ───────────────────────────────────────────────────────── */
+
+/* 玩家順位點：稿子是六角形 */
+#screen-pick .pdot {
+  clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
+  border-radius: 0;
+}
+#screen-pick .pdot.current {
+  box-shadow: 0 0 0 2px rgba(127, 220, 240, 0.9), 0 0 14px rgba(127, 220, 240, 0.45);
+}
+#screen-pick .pdot.done {
+  box-shadow: 0 0 0 2px rgba(233, 196, 119, 0.85), 0 0 14px rgba(255, 199, 92, 0.35);
+}
+
+/* 角色卡選中：金框比原本的暖白更貼稿 */
+#screen-pick .hero-card.selected {
+  border-color: var(--au);
+  box-shadow:
+    0 0 0 2px rgba(233, 196, 119, 0.35),
+    0 0 22px rgba(255, 199, 92, 0.5),
+    inset 0 0 16px rgba(255, 223, 160, 0.12);
+}
+
+/* ── 版本印記：跟著金色調，但仍然低調 ───────────────────────────── */
+.build-stamp {
+  color: rgba(233, 196, 119, 0.38);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn.primary, .btn.ghost { transition: none; }
+}
