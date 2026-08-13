@@ -6,7 +6,7 @@
  */
 window.HF_VideoPlayer = (() => {
   const MANIFEST_VERSION = "13";
-  const MEDIA_VERSION = "12";
+  const MEDIA_VERSION = "13";
   /** 攻擊／勝利短片維持現有節奏；選角確定片必須以原始速度完整播放。 */
   const CLIP_RATE = 1.3;
   const CONFIRM_RATE = 1;
