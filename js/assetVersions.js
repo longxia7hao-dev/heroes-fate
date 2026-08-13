@@ -144,7 +144,6 @@ window.HF_ASSET_V = {
 "assets/heroes/portraits/princess.jpg":"a440ebe206",
 "assets/heroes/portraits/ranger.jpg":"f10aef4e72",
 "assets/audio/bgm/battle.mp3":"769f23c700",
-"assets/audio/bgm/home.mp3":"61aaa70b2b",
 "assets/audio/bgm/home_custom.mp3":"10fb7ea41e",
 "assets/audio/bgm/pick.mp3":"3784bcef25",
 "assets/audio/heroes/attack/amazon.mp3":"f6c3cd1c52",

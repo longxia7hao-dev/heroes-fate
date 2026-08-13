@@ -152,30 +152,6 @@ def finalize(mix: Mix, fade: float = 0.05) -> np.ndarray:
     return np.clip(audio * (0.88 / peak), -1.0, 1.0)
 
 
-def bgm_home() -> np.ndarray:
-    bpm, bars = 80.0, 8
-    beat = 60.0 / bpm
-    mix = Mix(bars * 4 * beat)
-    chords = [(50, 53, 57), (46, 50, 53), (41, 45, 48), (48, 52, 55)] * 2
-    melody = [69, 72, 74, 72, 67, 69, 65, 64, 65, 69, 72, 69, 67, 64, 62, 64]
-    for bar, chord in enumerate(chords):
-        t0 = bar * 4 * beat
-        for n in chord:
-            mix.tone(n, t0, 4 * beat, 0.055, "sine", pan=(n - chord[1]) * 0.15, attack=0.3, release=0.5)
-            mix.tone(n - 12, t0, 4 * beat, 0.025, "triangle", attack=0.25, release=0.4)
-        arp = [chord[0] + 12, chord[1] + 12, chord[2] + 12, chord[1] + 12] * 2
-        for step, n in enumerate(arp):
-            mix.pluck(n, t0 + step * beat / 2, beat * 0.72, 0.12, pan=(-0.35 if step % 2 == 0 else 0.35))
-        mix.kick(t0, 0.07, 46)
-        mix.kick(t0 + 2 * beat, 0.045, 42)
-    for i, n in enumerate(melody):
-        start = i * 2 * beat
-        mix.tone(n, start, beat * 1.55, 0.085, "sine", pan=0.12, attack=0.08, release=0.32, vibrato=0.003)
-    for bar in (1, 3, 5, 7):
-        mix.bell(81 if bar % 4 == 1 else 84, bar * 4 * beat + 3 * beat, beat * 1.2, 0.07, 0.35)
-    return finalize(mix, 0.03)
-
-
 def bgm_pick() -> np.ndarray:
     bpm, bars = 96.0, 8
     beat = 60.0 / bpm
@@ -386,25 +362,18 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=Path(__file__).resolve().parents[1] / "assets" / "audio")
     args = parser.parse_args()
+    # 只剩這兩首場景曲還由本腳本產生。
+    #
+    # `bgm/home.mp3` 已刪除：改用睿哥自己的 `bgm/home_custom.mp3`，那支才是
+    # audioDirector 實際載入的檔案，舊的合成版從此沒有任何引用。
+    #
+    # **15 個 sfx 已全部移出本腳本**，改由 `tools/gen_sfx_v2.py` 產生
+    # （2026-08-14，睿哥指定「不要再出現類似電子音的」）。留在下面的
+    # `sfx_*()` 函式只當歷史參考，**不要再把它們接回 jobs** —— 一旦重跑
+    # 就會把重做過的音效整包蓋回舊的振盪器合成版。
     jobs = {
-        "bgm/home.mp3": (bgm_home, "112k"),
         "bgm/pick.mp3": (bgm_pick, "112k"),
         "bgm/battle.mp3": (bgm_battle, "128k"),
-        "sfx/ui_click.mp3": (sfx_ui_click, "64k"),
-        "sfx/ui_lock.mp3": (sfx_ui_lock, "80k"),
-        "sfx/ui_whoosh.mp3": (sfx_ui_whoosh, "80k"),
-        "sfx/wheel_hit.mp3": (sfx_wheel_hit, "80k"),
-        "sfx/smoke_burst.mp3": (sfx_smoke, "80k"),
-        "sfx/reveal_chime.mp3": (sfx_reveal, "96k"),
-        "sfx/boss_stinger.mp3": (sfx_boss_stinger, "96k"),
-        "sfx/boss_roar.mp3": (sfx_boss_roar, "96k"),
-        "sfx/boss_defeat.mp3": (sfx_boss_defeat, "96k"),
-        "sfx/victory_fanfare.mp3": (sfx_victory, "112k"),
-        "sfx/attack_sword.mp3": (lambda: sfx_attack("sword"), "80k"),
-        "sfx/attack_heavy.mp3": (lambda: sfx_attack("heavy"), "80k"),
-        "sfx/attack_arrow.mp3": (lambda: sfx_attack("arrow"), "80k"),
-        "sfx/attack_magic.mp3": (lambda: sfx_attack("magic"), "80k"),
-        "sfx/attack_holy.mp3": (lambda: sfx_attack("holy"), "80k"),
     }
     for rel, (build, bitrate) in jobs.items():
         target = args.output / rel
