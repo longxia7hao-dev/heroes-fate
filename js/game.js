@@ -2367,17 +2367,20 @@
     const el = $("#phone-url-hint");
     if (!el) return;
     const host = location.hostname;
-    // 公開隧道（可 4G/5G 直連，不必同一 Wi‑Fi）— 電腦開著 server+tunnel 才有效
-    const PUBLIC =
-      "https://vocational-brush-org-exceptional.trycloudflare.com/index.html?build=character-bgm-20260811";
+    // 正式公開網址：GitHub Pages。永久固定，不需要 Mac 開機或隧道。
+    const PUBLIC = "https://longxia7hao-dev.github.io/heroes-fate/";
     if (host === "127.0.0.1" || host === "localhost") {
       el.innerHTML =
-        "<b>手機 4G／網際網路：</b><br/>" +
+        "<b>手機 4G／網際網路（推薦）：</b><br/>" +
         `<a href="${PUBLIC}" style="color:#7ef0ff;word-break:break-all">${PUBLIC}</a><br/>` +
-        "<small>（Mac 需保持本頁 server 與隧道開啟）</small><br/><br/>" +
-        "<b>同一 Wi‑Fi：</b><br/>" +
+        "<small>永久網址，不需要 Mac 開機</small><br/><br/>" +
+        "<b>同一 Wi‑Fi（測本機未 push 的改動）：</b><br/>" +
         `<code style="color:#b0a8d0">http://192.168.68.52:8888/index.html</code><br/>` +
         "<small>勿在手機用 127.0.0.1</small>";
+    } else if (host.includes("github.io")) {
+      el.innerHTML =
+        "已從網際網路連入，可直接遊玩。<br/>" +
+        `<code style="color:#7ef0ff;word-break:break-all">${PUBLIC}</code>`;
     } else if (host.includes("trycloudflare.com") || host.includes("loca.lt")) {
       el.innerHTML =
         "已從網際網路連入，可直接遊玩。<br/>" +

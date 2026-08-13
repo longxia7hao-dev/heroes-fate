@@ -2,6 +2,15 @@
 
 這份檔案會在每個 session 自動載入，所以**不管是 Mac 終端機、桌面版、手機端還是雲端 session，看到的規則都一樣**。
 
+## 這個專案在哪、怎麼上線
+
+- **GitHub**：`longxia7hao-dev/heroes-fate`（公開）。本機開發目錄 `/Users/longxia7hao/Heroes_Fate`。
+- **正式網址**：<https://longxia7hao-dev.github.io/heroes-fate/> —— **push 到 `main` 就自動上線**，不需要任何機器開著。這是睿哥手機遊玩與驗收的入口。
+- **收工要 `git push`**，不然手機看不到你的改動。改完 → commit → push → 等約 1 分鐘 Pages 重建 → 手機下拉重載。
+- **repo 是程式碼的事實來源。** 雲端 session 動工前先 `git pull`；本機動工前也先 `git pull`，避免兩邊各改一份。
+- **版本控制只收遊戲實際在用的素材**（約 73MB）。舊高碼率原片與已停用的 `assets/anim` 由 `.gitignore` 排除，只留在本機與 Google Drive。**別把它們加回來。**
+- **雲端 session 做不到的事**：ffmpeg 轉檔、讀 Google Drive 素材夾（`tools/*.py` 需要）。那些要在本機做。純 JS／CSS／HTML 的修改在雲端完全沒問題。
+
 ## 動工前的閱讀順序
 
 1. **`PROJECT_NOTES.md`** ← **目前狀態的單一事實來源**。「目前狀態」＋「變更日誌」最上面那一條就是最新進度。有衝突時**以這份為準**。
@@ -26,7 +35,9 @@
 cd /Users/longxia7hao/Heroes_Fate && python3 -m http.server 8888 --bind 0.0.0.0
 ```
 
-`http://127.0.0.1:8888/index.html`，改碼後**強制重新整理**（Cmd+Shift+R）。手機／公開隧道見 `PHONE_ONLINE.txt`。
+`http://127.0.0.1:8888/index.html`，改碼後**強制重新整理**（Cmd+Shift+R）。這只是本機預覽；**要讓睿哥手機看到，一定要 push**（見上方）。
+
+注意：本機的 `python3 -m http.server` 對 Range 請求會回 200 而不是 206，這是 iOS Safari 音訊曾經播不出來的根因（見 v1.2.1）。GitHub Pages 正確回 206，所以**手機測試優先用 Pages 網址**，本機 server 只用來看未 push 的改動。
 
 ## 三個最常踩的坑
 
