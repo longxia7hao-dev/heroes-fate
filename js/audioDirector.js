@@ -22,6 +22,8 @@ window.HF_Audio = (() => {
     home: asset("assets/audio/bgm/home_custom.mp3"),
     pick: asset("assets/audio/bgm/pick.mp3"),
     battle: asset("assets/audio/bgm/battle.mp3"),
+    // 魔王降臨專用：只在魔王討伐的開場那幾秒播，之後交棒給 battle
+    bossArrival: asset("assets/audio/bgm/boss_arrival.mp3"),
   };
 
   /** 使用者製作的角色選擇曲精華；只在選角預覽時取代通用 pick BGM。 */
@@ -450,6 +452,16 @@ window.HF_Audio = (() => {
     if (currentScene === "pick") crossfadeMusic(sceneMusic.pick);
   }
 
+  /**
+   * 演出中途換場景音樂（目前用於魔王討伐：降臨曲 → 討伐曲）。
+   * 與 playHeroMusic 同樣的守則 —— 只在對應畫面有效，避免演出結束後
+   * 殘留的呼叫把結果頁的音樂蓋掉。
+   */
+  function playRaidMusic(key) {
+    if (currentScene !== "play") return;
+    crossfadeMusic(musicTracks[key] ? key : sceneMusic.play);
+  }
+
   function unlock() {
     const ctx = ensureContext();
     if (!ctx) {
@@ -622,6 +634,7 @@ window.HF_Audio = (() => {
     playHeroAttack,
     playHeroMusic,
     playHeroVictory,
+    playRaidMusic,
     preloadHeroes,
     setEnabled,
     setScene,
