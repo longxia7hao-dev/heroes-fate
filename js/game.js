@@ -1657,7 +1657,6 @@
       setBanner("命運之輪 · 全軍突擊！");
       audioCue("battle.clash", { group: "presentation" });
       await playStageClip(video, "assets/ref_battle_mobile.mp4", 1500 * fast);
-      boss.classList.add("show");
     }
 
     // === ACT 3B: 各角色的攻擊動畫一支接一支連播，中間不插打擊演出（避免割裂感） ===
@@ -1668,7 +1667,6 @@
     if (!state.skip) {
       setAct("fate");
       renderBattleHud(players);
-      boss.classList.add("show", "roar");
       smoke.classList.add("on");
       stage.classList.add("shake");
       setBanner("魔王怒吼——戰場被命運吞沒！");
@@ -1676,7 +1674,6 @@
       audioCue("smoke.burst", { group: "presentation", volume: 0.72 });
       haptic(22);
       await wait(760 * fast);
-      boss.classList.remove("roar");
       stage.classList.remove("shake", "dark");
     }
 
@@ -1687,7 +1684,6 @@
     // === ACT 5: reveal only the winner already stored in result. ===
     setAct("reveal");
     smoke.classList.remove("on");
-    boss.classList.add("show", "hurt");
     renderBattleHud(players, w.slot, w.slot);
     spot.classList.add("on");
     const chosenAll = result.chosen?.length ? result.chosen : [w];
@@ -1710,14 +1706,12 @@
       setAct("fate");
       stage.classList.add("shake", "dark");
       smoke.classList.add("on");
-      boss.classList.add("show", "roar");
       setBanner("審判降下……");
       audioCue("doom.slam", { group: "presentation" });
       haptic(26);
       await wait(900 * fast);
       stage.classList.remove("shake", "dark");
       smoke.classList.remove("on");
-      boss.classList.remove("roar");
       showResultBoss(w, wh);
       return;
     }
@@ -1726,8 +1720,7 @@
     setAct("victory");
     clearBattleHud();
     cleanupStageMedia({ release: true });
-    boss.classList.remove("show", "roar", "enter");
-    boss.classList.add("hurt", "down");
+    // 睿哥指定：降臨影片之後整場不再出現魔王立繪，所以沒有「倒下」可演，只留擊敗音效
     audioCue("boss.defeat", { group: "presentation" });
     smoke.classList.remove("on");
     spot.classList.remove("on");
@@ -1740,7 +1733,8 @@
           heroId: wh.id,
           stageEl: victory,
           bannerEl: null,
-          bossEl: boss,
+          // 立繪已從魔王討伐移除，勝利片不必再操作它
+          bossEl: null,
           filmHost: $("#film-host"),
           shouldSkip: () => state.skip,
           timeScale: state.opts.fast ? 1.45 : 1,

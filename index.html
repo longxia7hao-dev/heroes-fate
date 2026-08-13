@@ -21,8 +21,8 @@
   <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/game.css?v=3" />
   <link rel="stylesheet" href="css/revamp.css?v=28" />
-  <!-- 魔王立繪先抓：ACT2 一到就要顯示，晚了會是空的（4G 上尤其明顯） -->
-  <link rel="preload" as="image" href="assets/boss_model_v3.webp" type="image/webp" fetchpriority="high" />
+  <!-- 魔王立繪：魔王討伐已完全不用它，只剩命運淘汰會用到，所以降為低優先，不跟影片搶頻寬 -->
+  <link rel="preload" as="image" href="assets/boss_model_v3.webp" type="image/webp" fetchpriority="low" />
 </head>
 <body>
   <div id="app">
@@ -64,7 +64,7 @@
           而且開著不重整就永遠不會重抓），所有 ?v= 都不會生效 ——
           那時這行會停在舊版本號，或整行不存在。**改版時記得改這裡。**
         -->
-        <p class="build-stamp">v1.12 · 0814-0130</p>
+        <p class="build-stamp">v1.13 · 0814-0155</p>
       </div>
     </section>
 
@@ -354,6 +354,6 @@
   <script src="js/videoPlayer.js?v=28"></script>
   <script src="js/audioDirector.js?v=6"></script>
   <script src="js/victoryFilm.js?v=12"></script>
-  <script src="js/game.js?v=57"></script>
+  <script src="js/game.js?v=58"></script>
 </body>
 </html>
