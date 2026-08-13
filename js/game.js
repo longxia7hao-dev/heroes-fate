@@ -605,7 +605,9 @@
     state.players[state.pickIndex] = { heroId: id, hero: h };
     state.selectedHeroId = id;
     haptic(18);
-    audioCue("pick.lock", { group: "ui" });
+    // 這一鎖之後全隊就到齊了 → 吹號角，而不是又一次木扣（睿哥指定）。
+    // 判斷放在寫入 state.players 之後，allPlayersPicked() 才算得準。
+    audioCue(allPlayersPicked() ? "pick.complete" : "pick.lock", { group: "ui" });
     renderPartyDots();
     renderHeroGrid();
     setPickStatus(`已鎖定：${h.name}`);
@@ -2281,8 +2283,11 @@
     try {
       const ok = await applyPick();
       if (!ok) return;
+      // 還有人沒選 → 換人的過場音；全隊到齊時什麼都不放，
+      // 因為 applyPick() 已經吹過號角了（pick.complete）。
+      // 原本這裡會再補一記 reveal_chime，2 秒的鐘聲會跟 2.4 秒的號角糊在一起。
       const hasNext = state.players.some((player, index) => index > state.pickIndex && !player?.heroId);
-      audioCue(hasNext ? "pick.advance" : "pick.partyReady", { group: "ui" });
+      if (hasNext) audioCue("pick.advance", { group: "ui" });
 
       if (state.pickIndex >= state.players.length - 1) {
         goModeIfReady();

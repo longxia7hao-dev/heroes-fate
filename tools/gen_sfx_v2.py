@@ -375,6 +375,42 @@ def victory_fanfare() -> np.ndarray:
     return finish(reverb(out, "hall", 0.4), 0.9)
 
 
+def party_horn() -> np.ndarray:
+    """全隊到齊的召集號角（睿哥指定：最後一位選完要「號角響起」）。
+
+    真號角有三個特徵，少一個就會變回合成器的鋸齒：起音會從偏低滑上去、
+    越吹越亮（亮度隨力度走，所以用掃頻低通而不是固定濾波）、以及全程都在的
+    吹奏氣音。這裡是低音起、揚上五度的雙聲呼喚 —— 典型的召集號。
+    """
+    def note(hz, dur, gain=1.0):
+        n = n_of(dur)
+        t = np.arange(n) / SR
+        bend = 1.0 - 0.035 * np.exp(-14.0 * t)              # 起音上滑
+        vib = 1.0 + 0.006 * np.sin(2 * np.pi * 5.2 * t) * np.clip((t - 0.28) / 0.4, 0, 1)
+        f = hz * bend * vib
+        stack = np.zeros(n)
+        for det in (-9, 0, 8):
+            stack += signal.sawtooth(2 * np.pi * np.cumsum(f * (2 ** (det / 1200.0))) / SR)
+        stack /= 3.0
+        stack = sweep_lowpass(stack, hz * 1.8, hz * 5.2, 0.45)
+        breath = sos_filter(noise(dur), "bandpass", hz * 5, 0.55) * 0.14
+        return (stack + breath) * env_ad(dur, 0.055, dur * 0.72, 1.25) * gain
+
+    out = np.zeros(n_of(2.4))
+
+    def place(seg, start):
+        i = n_of(start)
+        m = min(len(seg), len(out) - i)
+        if m > 0:
+            out[i:i + m] += seg[:m]
+
+    place(note(196.00, 0.72, 0.95), 0.0)    # G3
+    place(note(98.00, 0.72, 0.40), 0.0)     # 低八度加厚
+    place(note(293.66, 1.50, 1.00), 0.62)   # 揚上五度 D4
+    place(note(146.83, 1.50, 0.42), 0.62)
+    return finish(reverb(saturate(out, 1.5), "hall", 0.44), 0.9)
+
+
 SOUNDS = {
     "ui_click": (ui_click, 96),
     "ui_lock": (ui_lock, 112),
@@ -391,6 +427,7 @@ SOUNDS = {
     "smoke_burst": (smoke_burst, 112),
     "reveal_chime": (reveal_chime, 128),
     "victory_fanfare": (victory_fanfare, 144),
+    "party_horn": (party_horn, 112),
 }
 
 

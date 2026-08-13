@@ -56,6 +56,7 @@ window.HF_Audio = (() => {
   };
 
   const sfx = {
+    party_horn: asset("assets/audio/sfx/party_horn.mp3"),
     ui_click: asset("assets/audio/sfx/ui_click.mp3"),
     ui_lock: asset("assets/audio/sfx/ui_lock.mp3"),
     ui_whoosh: asset("assets/audio/sfx/ui_whoosh.mp3"),
@@ -97,6 +98,8 @@ window.HF_Audio = (() => {
     "ui.skip": ["ui_click", 0.38, 0.78],
     "pick.preview": ["ui_click", 0.32, 1.06],
     "pick.lock": ["ui_lock", 0.7, 1],
+    // 最後一位鎖定＝全隊到齊，換成召集號角（見 game.js 的 applyPick）
+    "pick.complete": ["party_horn", 0.82, 1],
     "pick.advance": ["ui_whoosh", 0.48, 1.08],
     "pick.partyReady": ["reveal_chime", 0.68, 1.04],
     "mode.select": ["ui_lock", 0.64, 0.92],
