@@ -56,6 +56,7 @@ window.HF_Audio = (() => {
   };
 
   const sfx = {
+    fate_strike: asset("assets/audio/sfx/fate_strike.mp3"),
     party_horn: asset("assets/audio/sfx/party_horn.mp3"),
     ui_click: asset("assets/audio/sfx/ui_click.mp3"),
     ui_lock: asset("assets/audio/sfx/ui_lock.mp3"),
@@ -106,7 +107,9 @@ window.HF_Audio = (() => {
     "round.open": ["ui_whoosh", 0.7, 0.82],
     "fate.cardReveal": ["reveal_chime", 0.66, 0.96],
     "strike.charge": ["wheel_hit", 0.42, 0.72],
-    "strike.release": ["reveal_chime", 0.74, 1.05],
+    // 一擊落下用衝擊音，不用鐘 —— 0.6 秒後的 reveal.winner 才是鐘，
+    // 兩顆都放鐘會疊成「魔法陣結束還在噹」
+    "strike.release": ["fate_strike", 0.86, 1],
     "battle.gather": ["wheel_hit", 0.42, 0.82],
     "battle.clash": ["smoke_burst", 0.52, 1.06],
     "boss.enter": ["boss_stinger", 0.84, 1],

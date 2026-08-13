@@ -320,12 +320,20 @@ def smoke_burst() -> np.ndarray:
 
 
 def reveal_chime() -> np.ndarray:
-    """揭曉：非諧波鐘（真實鐘的泛音就是非整數比），長尾。"""
-    bell = modal(2.0, [587, 1174, 1466, 1760, 2637, 3520, 4692],
-                 [1.2, 0.95, 0.7, 0.6, 0.4, 0.28, 0.18],
-                 [1.0, 0.55, 0.42, 0.62, 0.3, 0.2, 0.12])
-    sparkle = sos_filter(noise(2.0), "highpass", 5200) * env_ad(2.0, 0.005, 0.10, 4.0) * 0.25
-    return finish(reverb(bell + sparkle, "hall", 0.52), 0.84)
+    """揭曉的重音。非諧波鐘（真實鐘的泛音就是非整數比），但**尾巴要短**。
+
+    第一版是 2 秒、頻譜重心 4926Hz 的長鳴鐘。它在命運一擊完成後只隔 6ms
+    就響（`reveal.winner` 緊接在 `strike.release` 之後），於是變成睿哥說的
+    「魔法陣結束還在噹」—— 圓陣都收了，鐘還在響。
+
+    收短到 1.1 秒、最長衰減砍掉一半以上，並拿掉最高的兩段泛音（3520／4692）
+    ——「噹」的刺耳感主要來自那裡。它仍然是鐘，只是變成一記重音而不是長鳴。
+    """
+    bell = modal(1.1, [587, 1174, 1466, 1760, 2637],
+                 [0.50, 0.40, 0.30, 0.26, 0.16],
+                 [1.0, 0.55, 0.42, 0.55, 0.22])
+    sparkle = sos_filter(noise(1.1), "highpass", 4200) * env_ad(1.1, 0.004, 0.055, 5.0) * 0.16
+    return finish(reverb(bell + sparkle, "hall", 0.42), 0.84)
 
 
 def victory_fanfare() -> np.ndarray:
@@ -373,6 +381,27 @@ def victory_fanfare() -> np.ndarray:
     for i, s in enumerate([0.0, beat, 2 * beat, 3.2 * beat]):
         taiko(s, 0.34 + 0.05 * i)
     return finish(reverb(out, "hall", 0.4), 0.9)
+
+
+def fate_strike() -> np.ndarray:
+    """命運一擊落下（魔法陣四個符文全亮的那一刻）。
+
+    原本這裡用的是 `reveal_chime`，而 0.6 秒後的揭曉又是同一顆鐘 ——
+    兩記 2 秒的鐘聲疊在一起，就是睿哥說的「魔法陣結束還在噹」。
+    這裡要的是**一擊**不是鈴聲，所以刻意不放任何長衰減的共振：
+    低頻轟落 + 瞬態 + 由亮轉暗的下墜掃頻，尾巴全靠殘響收掉。
+    """
+    dur = 1.6
+    n = n_of(dur)
+    t = np.arange(n) / SR
+    # 低頻轟落：90Hz 掉到 38Hz
+    boom = np.sin(2 * np.pi * np.cumsum(52 * np.exp(-7.5 * t) + 38) / SR)
+    boom *= env_ad(dur, 0.003, 0.34, 2.2)
+    # 撞擊瞬態
+    hit = sos_filter(noise(dur), "bandpass", 900, 0.6) * env_ad(dur, 0.0008, 0.030, 5.5)
+    # 「命運落下」的下墜掃頻：由亮轉暗，這段給魔法感又不會變成鈴聲
+    fall = sweep_lowpass(pink(dur), 5200, 380, 0.55) * env_ad(dur, 0.008, 0.30, 2.6) * 0.55
+    return finish(reverb(saturate(1.25 * boom + 0.55 * hit + fall, 2.0), "hall", 0.46), 0.92)
 
 
 def party_horn() -> np.ndarray:
@@ -428,6 +457,7 @@ SOUNDS = {
     "reveal_chime": (reveal_chime, 128),
     "victory_fanfare": (victory_fanfare, 144),
     "party_horn": (party_horn, 112),
+    "fate_strike": (fate_strike, 128),
 }
 
 
