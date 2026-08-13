@@ -266,6 +266,19 @@
    */
   const waitPrefetchPool = [];
   let waitPrefetchStarted = false;
+
+  /** 選角舞台正在等影片就緒時暫停預抓（上限 6 秒，避免整串卡死） */
+  async function yieldToActivePick() {
+    const busy = () => {
+      const st = pickVideo?.el?.dataset?.state;
+      return st === "loading" || st === "confirm-loading";
+    };
+    const until = performance.now() + 6000;
+    while (busy() && performance.now() < until) {
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  }
+
   async function prefetchWaitClips() {
     if (waitPrefetchStarted || !window.HF_VideoPlayer?.loadManifest) return;
     waitPrefetchStarted = true;
@@ -275,6 +288,9 @@
       return;
     }
     for (const hero of HEROES) {
+      // 玩家眼前那支還在載的時候先讓路：預抓是排隊在後面的 13 支，
+      // 搶了頻寬就會變成「點了角色卻停在空舞台」（龍騎士排最後最明顯）。
+      await yieldToActivePick();
       const url = window.HF_VideoPlayer.videoUrl(hero.id, "wait");
       if (!url) continue;
       const el = document.createElement("video");

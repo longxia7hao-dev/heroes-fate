@@ -12,6 +12,11 @@ window.HF_VideoPlayer = (() => {
   /** 攻擊／勝利短片維持現有節奏；選角確定片必須以原始速度完整播放。 */
   const CLIP_RATE = 1.3;
   const CONFIRM_RATE = 1;
+  /**
+   * 待命片沒能在這時間內開播，就先亮立繪頂著。
+   * 4G 首次載入時影片要好幾秒，沒有這層舞台會一直停在空的召喚陣。
+   */
+  const STILL_FALLBACK_MS = 260;
   let manifest = null;
   let manifestPromise = null;
 
@@ -145,6 +150,11 @@ window.HF_VideoPlayer = (() => {
       setState("fallback");
     }
 
+    /** 目前畫面上是否已經有影片在演（有的話就別用靜圖蓋掉它） */
+    function hasVisibleVideo() {
+      return videos.some((el) => el.classList.contains("is-active"));
+    }
+
     function activateVideo(target, token) {
       if (destroyed || token !== playToken || !target) return false;
       const previous = video;
@@ -221,35 +231,61 @@ window.HF_VideoPlayer = (() => {
       }
     }
 
-    async function play(id, playKind = "wait") {
-      if (destroyed || !id) return;
+    /**
+     * 「舞台上已經有東西了」的訊號。呼叫端（選角頁）靠它決定何時揭開舞台，
+     * 所以它必須在影片開播 **或** 立繪頂上時就 resolve —— 不能等 video.play()。
+     * 慢速網路上 play() 的 promise 會一直 pending，等它就等於永遠不揭開。
+     */
+    function beginReveal(id, token) {
+      let settled = false;
+      let resolveFn = () => {};
+      const promise = new Promise((r) => { resolveFn = r; });
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolveFn();
+      };
+      const timer = setTimeout(() => {
+        if (!destroyed && token === playToken && !hasVisibleVideo()) primeStill(id);
+        done();
+      }, STILL_FALLBACK_MS);
+      return { promise, done };
+    }
+
+    function play(id, playKind = "wait") {
+      if (destroyed || !id) return Promise.resolve();
       const token = ++playToken;
       currentId = id;
       setBadge(playKind === "confirm" ? "鎖定中…" : "");
       root.classList.toggle("vp-confirm", playKind === "confirm");
       setState("loading");
-      // 不預先鋪方形立繪：等影片就緒直接播，避免先出現比例不同的靜圖
+      const reveal = beginReveal(id, token);
+      runPlay(id, playKind, token, reveal).catch(() => reveal.done());
+      return reveal.promise;
+    }
 
+    async function runPlay(id, playKind, token, reveal) {
       await loadManifest();
-      if (destroyed || token !== playToken) return;
+      if (destroyed || token !== playToken) return reveal.done();
 
       const url = videoUrl(id, playKind);
       if (!url) {
         showStill(id);
         setBadge("");
-        return;
+        return reveal.done();
       }
 
       const src = versioned(url);
       const target = video.dataset.src === src ? video : standby;
       if (!target) {
         showStill(id);
-        return;
+        return reveal.done();
       }
       if (target.dataset.src !== src) {
         setSource(target, src, { loop: playKind === "wait", preload: "auto" });
         await waitEvent(target, "canplay", 1400);
-        if (destroyed || token !== playToken) return;
+        if (destroyed || token !== playToken) return reveal.done();
       }
       target.loop = playKind === "wait";
 
@@ -259,18 +295,30 @@ window.HF_VideoPlayer = (() => {
         target.playbackRate = 1;
       } catch (_) {}
 
+      // 以 playing 事件當「真的開演」的訊號：影片晚幾秒才就緒也換得掉立繪。
+      let shown = false;
+      const showVideo = () => {
+        if (shown || destroyed || token !== playToken) return;
+        shown = true;
+        activateVideo(target, token);
+        setState("playing");
+        reveal.done();
+        if (playKind === "wait") primeMedia(id, "confirm");
+      };
+      target.addEventListener("playing", showVideo, { once: true });
+
       try {
         const p = target.play();
         if (p && typeof p.then === "function") await p;
-        if (destroyed || token !== playToken) return;
-        activateVideo(target, token);
-        setState("playing");
-        if (playKind === "wait") primeMedia(id, "confirm");
+        if (destroyed || token !== playToken) return reveal.done();
+        showVideo();
       } catch (_) {
+        target.removeEventListener("playing", showVideo);
         if (token === playToken) {
           showStill(id);
           setBadge("");
         }
+        reveal.done();
       }
     }
 
@@ -359,8 +407,16 @@ window.HF_VideoPlayer = (() => {
           await waitEvent(target, "canplay", Math.min(560, Math.max(220, (maxMs | 0) - 180)));
         }
         if (destroyed || token !== playToken || settled) return finish();
-        // 載不動就直接收尾，不要呆等硬上限（手機網路差時會像卡住）
-        if (target.error || target.readyState < 2) return finish();
+        // 載不動就直接收尾，不要呆等硬上限（手機網路差時會像卡住）。
+        // 但畫面上若連待命片都沒有，先用立繪頂一拍再收，至少讓玩家看到自己選的角色。
+        if (target.error || target.readyState < 2) {
+          if (hasVisibleVideo()) return finish();
+          showStill(id);
+          const left = maxTotalMs - (performance.now() - startedAt);
+          if (timer) clearTimeout(timer);
+          timer = setTimeout(finish, Math.max(0, Math.min(900, left)));
+          return;
+        }
 
         try {
           target.currentTime = 0;
