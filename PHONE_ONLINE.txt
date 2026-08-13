@@ -1,0 +1,15 @@
+手機網際網路遊玩（不必同一 Wi‑Fi）
+================================
+
+目前公開網址（4G/5G 可開）：
+https://vocational-brush-org-exceptional.trycloudflare.com/index.html?build=character-bgm-20260811
+
+注意：
+1. Mac 必須保持「遊戲 server」(8888) 與 cloudflared 隧道開啟
+2. 關閉 Mac 或關掉終端機後，此網址會失效
+3. 現行主路徑影片約 25MB，聲音包約 1.9MB，依然建議使用穩定網路
+4. 每次重開隧道，網址可能會變
+5. 首頁先點「點一下開啟完整音效」，變成綠色「完整音效已開啟」後再開始遊戲
+
+同 Wi‑Fi 本機網址：
+http://192.168.68.52:8888/index.html

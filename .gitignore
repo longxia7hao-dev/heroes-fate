@@ -1,0 +1,17 @@
+# ── 大型原始素材：只留遊戲實際在用的，其餘保留在本機與 Google Drive ──
+# 舊高碼率原片（現行 manifest 不使用，約 272MB）
+assets/videos/wait/
+assets/videos/confirm/
+assets/videos/victory/
+# 已停用的 sprite sheet 動畫（約 128MB）
+assets/anim/
+
+# 參考片
+assets/ref_battle.mp4
+assets/ref_battle_mobile.mp4
+
+# macOS / Python
+.DS_Store
+._*
+__pycache__/
+*.pyc

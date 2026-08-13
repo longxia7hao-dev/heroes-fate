@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#090512" />
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <title>英雄命運 Heroes' Fate</title>
+  <!-- 關鍵底色：即使 CSS 慢載也不白屏 -->
+  <style>
+    html, body { margin: 0; background: #0a0818; color: #f4f0ff; min-height: 100%; }
+    #boot-fallback { display: none; padding: 2rem 1.2rem; font-family: system-ui, sans-serif; }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/game.css?v=2" />
+  <link rel="stylesheet" href="css/revamp.css?v=20" />
+</head>
+<body>
+  <div id="app">
+    <section id="screen-boot" class="screen active">
+      <div class="boot-stars" aria-hidden="true"></div>
+      <div class="boot-inner">
+        <div class="boot-sigil" aria-hidden="true"><span>✦</span></div>
+        <p class="boot-sub">抽中的，不只是命運。</p>
+        <h1 class="boot-logo">英雄命運</h1>
+        <p class="boot-en">HEROES' FATE</p>
+        <div class="boot-bar"><i></i></div>
+      </div>
+    </section>
+
+    <section id="screen-home" class="screen">
+      <div class="home-bg"></div>
+      <div class="home-ambient" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="home-shell">
+        <header class="home-brand">
+          <div class="home-crest" aria-hidden="true"><span>✦</span></div>
+          <p class="tag">HEROES' FATE</p>
+          <h1><span>英雄</span><span>命運</span></h1>
+          <p class="tagline">讓抽籤，成為值得歡呼的冒險</p>
+        </header>
+        <div class="home-panel card">
+          <p class="home-eyebrow"><span></span> 命運儀式已就緒 <span></span></p>
+          <button class="btn primary lg home-start" data-go="count">
+            <span>開始冒險</span><small>ENTER THE FATE</small>
+          </button>
+          <button class="btn ghost home-settings" id="btn-settings">遊戲設定</button>
+          <button class="audio-activate" id="audio-activate" type="button" aria-live="polite" aria-pressed="true">
+            <span class="audio-activate-icon" id="audio-activate-icon" aria-hidden="true">🔊</span>
+            <span><b id="audio-activate-title">點一下開啟完整音效</b><small id="audio-activate-sub">背景音樂＋角色招式＋魔王怒吼</small></span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-count" class="screen">
+      <div class="screen-backdrop count-backdrop" aria-hidden="true"></div>
+      <div class="card panel count-panel">
+        <p class="step-kicker">STEP 01 · PARTY</p>
+        <h2>編成冒險隊伍</h2>
+        <p class="desc">選擇要交給命運的玩家人數</p>
+        <div class="count-orbit">
+          <i aria-hidden="true"></i>
+          <div class="count-ctrl">
+            <button class="btn round" id="count-minus" aria-label="減少玩家">−</button>
+            <div class="count-num" id="count-num" aria-live="polite">4</div>
+            <button class="btn round" id="count-plus" aria-label="增加玩家">＋</button>
+          </div>
+        </div>
+        <input type="range" id="count-range" min="2" max="13" value="4" />
+        <div class="count-range-labels" aria-hidden="true"><span>2 人</span><span>13 人</span></div>
+        <div class="row count-actions">
+          <button class="btn ghost" data-go="home">返回</button>
+          <button class="btn primary" data-go="pick">進入英雄殿堂</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-pick" class="screen screen-pick">
+      <div class="pick-arena">
+        <header class="pick-header">
+          <div class="slot-chip" id="pick-slot">玩家 1 / 4</div>
+          <div class="pick-header-text">
+            <h2 id="pick-job">騎士</h2>
+            <p id="pick-weapon">長劍與盾</p>
+          </div>
+          <p class="flavor" id="pick-flavor">命運由劍開路。</p>
+          <p class="pick-status" id="pick-status" role="status" aria-live="polite">點角色預覽，再按決定鎖定</p>
+        </header>
+
+        <!-- 動畫框在上、縮圖選單 7×2 在下 -->
+        <div class="pick-u" aria-label="角色選擇版面">
+          <div class="pick-stage-core">
+            <div class="model-pedestal">
+              <div class="pedestal-frame" aria-hidden="true"></div>
+              <div class="pedestal-rune" aria-hidden="true"></div>
+              <div id="sprite-stage" class="sprite-stage" aria-label="角色等待／確定動畫"></div>
+            </div>
+          </div>
+          <div id="hero-grid" class="hero-grid" aria-label="角色縮圖選單"></div>
+        </div>
+
+        <footer class="pick-footer">
+          <div class="party-dots" id="party-dots"></div>
+          <div class="row pick-actions">
+            <button class="btn ghost" data-go="count">返回</button>
+            <button class="btn ghost" id="pick-prev" disabled>上一位</button>
+            <button class="btn primary" id="pick-next" disabled>決定 · 下一位</button>
+          </div>
+        </footer>
+      </div>
+    </section>
+
+    <section id="screen-mode" class="screen">
+      <div class="screen-backdrop mode-backdrop" aria-hidden="true"></div>
+      <div class="card panel wide mode-panel">
+        <p class="step-kicker">STEP 03 · RITUAL</p>
+        <h2>選擇命運儀式</h2>
+        <p class="desc">結果早已由公平 RNG 定案，接下來只差揭曉</p>
+        <div class="mode-cards">
+          <button class="mode-card" data-mode="boss">
+            <span class="m-ico" aria-hidden="true">RAID</span>
+            <span class="m-kicker">抽出一位</span>
+            <span class="m-title">魔王討伐</span>
+            <span class="m-desc">全員集結、混戰、煙霧揭曉與專屬勝利短片</span>
+            <span class="m-cta">進入戰場 →</span>
+          </button>
+          <button class="mode-card" data-mode="order">
+            <span class="m-ico" aria-hidden="true">ORDER</span>
+            <span class="m-kicker">決定順位</span>
+            <span class="m-title">命運排序</span>
+            <span class="m-desc">依序揭曉每位英雄的命運順位</span>
+            <span class="m-cta">開始排序 →</span>
+          </button>
+          <button class="mode-card" data-mode="pair">
+            <span class="m-ico" aria-hidden="true">PAIR</span>
+            <span class="m-kicker">自動分組</span>
+            <span class="m-title">命運配對</span>
+            <span class="m-desc">洗牌後兩兩連結，奇數自動輪空</span>
+            <span class="m-cta">開始配對 →</span>
+          </button>
+          <button class="mode-card" data-mode="doom">
+            <span class="m-ico" aria-hidden="true">DOOM</span>
+            <span class="m-kicker">抽最倒楣的</span>
+            <span class="m-title">命運審判</span>
+            <span class="m-desc">同樣的演出，但這次選中的是要受罰的人</span>
+            <span class="m-cta">降下審判 →</span>
+          </button>
+          <button class="mode-card" data-mode="survival">
+            <span class="m-ico" aria-hidden="true">LAST</span>
+            <span class="m-kicker">留到最後</span>
+            <span class="m-title">命運淘汰</span>
+            <span class="m-desc">每輪倒下一位，最後生還者勝出</span>
+            <span class="m-cta">開始淘汰 →</span>
+          </button>
+          <div class="mode-card mode-card-teams" data-mode-group="teams">
+            <span class="m-ico" aria-hidden="true">TEAM</span>
+            <span class="m-kicker">隨機分隊</span>
+            <span class="m-title">命運分隊</span>
+            <span class="m-desc">洗牌後平均分隊，人數差最多一人</span>
+            <span class="team-count-row">
+              <button type="button" class="btn tiny" data-mode="teams" data-teams="2">2 隊</button>
+              <button type="button" class="btn tiny" data-mode="teams" data-teams="3">3 隊</button>
+              <button type="button" class="btn tiny" data-mode="teams" data-teams="4">4 隊</button>
+            </span>
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn ghost" data-go="pick">返回</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-play" class="screen">
+      <div class="stage" id="stage">
+        <div class="stage-world" id="stage-world">
+          <div class="stage-bg" id="stage-bg"></div>
+          <video id="stage-video" class="stage-video" playsinline webkit-playsinline muted preload="metadata"></video>
+          <div class="cine-layer" id="cine-layer" aria-hidden="true">
+            <div class="cine-vignette"></div>
+            <div class="cine-runes"></div>
+            <div class="cine-speedlines"></div>
+            <div class="fx-particles" id="fx-particles"></div>
+            <div class="impact-ring" id="impact-ring"></div>
+          </div>
+          <div class="smoke" id="smoke"></div>
+          <div class="boss" id="boss">
+            <div class="boss-aura" aria-hidden="true"></div>
+            <img class="boss-img" src="assets/boss_model_v2.png" alt="魔王" />
+            <div class="boss-label"><span>DEMON LORD</span>魔王</div>
+          </div>
+          <div class="heroes-line" id="heroes-line" aria-label="參戰英雄"></div>
+          <div class="spotlight" id="spotlight"></div>
+        </div>
+        <div class="hero-cut" id="hero-cut" aria-hidden="true">
+          <img class="hero-cut-poster" id="hero-cut-poster" src="assets/heroes/knight.png?v=2" alt="" />
+          <video class="hero-cut-video" id="hero-cut-video" playsinline webkit-playsinline muted preload="metadata"></video>
+          <div class="cut-tap-hint" id="cut-tap-hint" aria-hidden="true">點一下跳下一位</div>
+          <div class="hero-cut-shade"></div>
+          <div class="hero-cut-slashes" aria-hidden="true"><i></i><i></i><i></i></div>
+          <div class="hero-cut-meta">
+            <span class="hero-cut-count" id="hero-cut-count">01 / 02</span>
+            <small id="hero-cut-player">玩家 1</small>
+            <strong id="hero-cut-name">騎士</strong>
+            <em id="hero-cut-weapon">長劍與盾</em>
+          </div>
+        </div>
+        <div class="fx-flash" id="fx-flash"></div>
+        <!-- 命運一擊：全員按住螢幕蓄力後揭曉（純儀式，不影響結果） -->
+        <div class="strike-gate" id="strike-gate" aria-hidden="true">
+          <div class="strike-ring" id="strike-ring"><i></i></div>
+          <p class="strike-title">全員按住螢幕</p>
+          <p class="strike-sub" id="strike-sub">一起把命運按下去</p>
+          <div class="strike-count" id="strike-count">3</div>
+        </div>
+        <!-- 命運卡：開局翻牌，改變本局規則（卡片同樣 seed-first 抽出） -->
+        <div class="fate-card-layer" id="fate-card-layer" aria-hidden="true">
+          <div class="fate-card" id="fate-card">
+            <p class="fc-kicker">命運卡</p>
+            <p class="fc-name" id="fate-card-name">風平浪靜</p>
+            <p class="fc-desc" id="fate-card-desc">普通的一局</p>
+          </div>
+        </div>
+        <div class="cut-banner" id="cut-banner" role="status" aria-live="polite"></div>
+        <div class="victory-panel" id="victory-panel">
+          <div class="film-letterbox">
+            <div id="film-host" class="film-host"></div>
+            <div class="film-grain"></div>
+          </div>
+        </div>
+        <div class="skip-bar">
+          <button class="btn ghost sm" id="btn-skip">略過動畫</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-result" class="screen">
+      <div class="screen-backdrop result-backdrop" aria-hidden="true"></div>
+      <div class="card panel result-panel">
+        <div class="result-rays" aria-hidden="true"></div>
+        <div class="result-badge" id="result-badge">🏆 勝利者</div>
+        <div class="result-model" id="result-model">
+          <video id="result-video" playsinline webkit-playsinline muted loop preload="auto"></video>
+          <img id="result-img" src="assets/heroes/knight.png?v=2" alt="" />
+        </div>
+        <h2 id="result-name">—</h2>
+        <p id="result-hero" class="result-hero">—</p>
+        <div id="result-detail" class="result-detail"></div>
+        <div class="doom-box" id="doom-box" hidden>
+          <p class="doom-kicker">命運判決</p>
+          <p class="doom-text" id="doom-text">—</p>
+        </div>
+        <div class="row wrap">
+          <button class="btn gold" id="btn-doom">抽懲罰任務</button>
+          <button class="btn ghost" id="btn-scroll">命運卷軸</button>
+          <button class="btn ghost" id="btn-stats">今晚戰績</button>
+          <button class="btn primary" id="btn-replay">再來一局</button>
+          <button class="btn ghost" data-go="mode">換模式</button>
+          <button class="btn ghost" data-go="pick" data-reset-picks="1">重新選角</button>
+          <button class="btn ghost" data-go="home">回主選單</button>
+        </div>
+      </div>
+    </section>
+
+    <div id="modal-settings" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="card panel settings-panel">
+        <h2 id="settings-title">遊戲設定</h2>
+        <label class="check"><input type="checkbox" id="opt-skip" checked /> 允許跳過演出</label>
+        <label class="check"><input type="checkbox" id="opt-fast" /> 快速模式</label>
+        <label class="check"><input type="checkbox" id="opt-sound" checked /> <span id="opt-sound-icon" aria-hidden="true">🔊</span> <span>背景音樂與音效</span></label>
+        <div class="audio-settings" id="audio-settings">
+          <label for="opt-master"><span>總音量</span><output id="opt-master-value">86%</output></label>
+          <input type="range" id="opt-master" min="0" max="100" value="86" />
+          <label for="opt-music"><span>背景音樂</span><output id="opt-music-value">48%</output></label>
+          <input type="range" id="opt-music" min="0" max="100" value="48" />
+          <label for="opt-effects"><span>角色／戰鬥音效</span><output id="opt-effects-value">82%</output></label>
+          <input type="range" id="opt-effects" min="0" max="100" value="82" />
+        </div>
+        <label class="check"><input type="checkbox" id="opt-strike" checked /> 命運一擊（揭曉前全員按住）</label>
+        <label class="check"><input type="checkbox" id="opt-card" checked /> 命運卡（每局隨機規則）</label>
+        <div class="settings-block">
+          <p class="settings-label">懲罰／任務清單（一行一則）</p>
+          <textarea id="opt-doom-list" class="settings-textarea" rows="6" spellcheck="false"></textarea>
+          <div class="row">
+            <button class="btn ghost sm" id="doom-reset">還原預設</button>
+          </div>
+        </div>
+        <button class="btn primary" id="settings-close">關閉</button>
+      </div>
+    </div>
+
+    <div id="modal-stats" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="stats-title">
+      <div class="card panel settings-panel">
+        <h2 id="stats-title">今晚戰績</h2>
+        <div id="stats-body" class="stats-body"></div>
+        <div class="row">
+          <button class="btn ghost sm" id="stats-clear">清除今晚</button>
+          <button class="btn primary" id="stats-close">關閉</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="modal-scroll" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="scroll-title">
+      <div class="card panel scroll-panel">
+        <h2 id="scroll-title" class="sr-only">命運卷軸</h2>
+        <canvas id="scroll-canvas" width="720" height="1080"></canvas>
+        <p class="scroll-hint">長按圖片可儲存，或直接截圖分享</p>
+        <div class="row">
+          <button class="btn ghost sm" id="scroll-save">下載圖片</button>
+          <button class="btn primary" id="scroll-close">關閉</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="scene-transition" class="scene-transition" aria-hidden="true">
+      <i class="scene-transition-ring"></i>
+      <b class="scene-transition-sigil">✦</b>
+      <span></span><span></span><span></span><span></span>
+    </div>
+  </div>
+  <script src="js/data.js?v=2"></script>
+  <script src="js/rng.js?v=7"></script>
+  <script src="js/videoPlayer.js?v=22"></script>
+  <script src="js/audioDirector.js?v=6"></script>
+  <script src="js/victoryFilm.js?v=12"></script>
+  <script src="js/game.js?v=48"></script>
+</body>
+</html>
