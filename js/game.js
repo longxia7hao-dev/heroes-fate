@@ -161,6 +161,7 @@
       if (previous !== "result") audioCue("result.settle", { group: "ui" });
     }
     if (name === "count") warmPickAssets();
+    if (name === "mode") prefetchArrivalClip();
   }
 
   function heroById(id) {
@@ -948,6 +949,27 @@
     } catch (_) {}
   }
 
+  /**
+   * 魔王降臨片（1.35MB）在選模式那一頁就開始抓：ACT2 一到就要播，
+   * 等到那一刻才下載，4G 上必定卡住或整段被跳過。
+   */
+  let arrivalPrefetch = null;
+  function prefetchArrivalClip() {
+    if (arrivalPrefetch) return;
+    try {
+      const url = "assets/videos/mobile/boss/arrival.mp4";
+      const el = document.createElement("video");
+      el.preload = "auto";
+      el.muted = true;
+      el.playsInline = true;
+      el.src = window.HF_VideoPlayer?.versioned
+        ? window.HF_VideoPlayer.versioned(url)
+        : url;
+      try { el.load(); } catch (_) {}
+      arrivalPrefetch = el;
+    } catch (_) {}
+  }
+
   function clearAttackPrefetch() {
     attackPrefetchPool.forEach((el) => {
       try {
@@ -972,12 +994,17 @@
       video.muted = true;
       video.playsInline = true;
       try { video.load(); } catch (_) {}
-      const ready = await waitMediaReady(video, 1000);
+      // 大支的全螢幕片（魔王降臨 1.35MB）在 4G 上 1 秒絕對載不完，
+      // 就緒等待要能個別放寬，否則整段會被判定沒就緒而直接跳過。
+      const ready = await waitMediaReady(video, opts.readyMs || 1000);
       if (!ready || state.skip) return false;
       try { video.currentTime = 0; } catch (_) {}
       video.classList.add("show");
       try { video.play()?.catch?.(() => {}); } catch (_) {}
-      await wait(Math.max(180, durationMs | 0));
+      // untilEnded：等 ended 事件而不是硬等固定秒數，播多久就是多久，
+      // 起播晚了也不會被攔腰切掉（durationMs 此時只當保險上限）。
+      if (opts.untilEnded) await waitClipEnd(video, Math.max(600, durationMs | 0));
+      else await wait(Math.max(180, durationMs | 0));
       return !video.error;
     } finally {
       // Always clears the overlay, including an early Skip.
@@ -1176,7 +1203,6 @@
   function playFateStrike(fast) {
     return new Promise((resolve) => {
       const gate = $("#strike-gate");
-      const ring = $("#strike-ring");
       const countEl = $("#strike-count");
       const subEl = $("#strike-sub");
       if (!gate || !state.opts.strike || state.skip) return resolve();
@@ -1198,7 +1224,7 @@
         window.removeEventListener("pointercancel", onUp);
         gate.classList.remove("show", "charging");
         gate.setAttribute("aria-hidden", "true");
-        ring?.style.setProperty("--p", "0");
+        gate.style.setProperty("--p", "0");
         resolve();
       };
 
@@ -1206,7 +1232,8 @@
         if (done) return;
         if (state.skip) return finish();
         const p = Math.min(1, (performance.now() - startedAt) / holdMs);
-        ring?.style.setProperty("--p", String(p));
+        // 魔法陣的亮度與四個符文全由這個值驅動（見 css/revamp.css 的 .fate-circle）
+        gate.style.setProperty("--p", String(p));
         if (countEl) countEl.textContent = String(Math.max(1, Math.ceil((1 - p) * 3)));
         if (p >= 1) {
           haptic(24);
@@ -1233,13 +1260,15 @@
         held = false;
         cancelAnimationFrame(raf);
         gate.classList.remove("charging");
-        ring?.style.setProperty("--p", "0");
+        // 放開就整組回到暗版，下次按住重新開始
+        gate.style.setProperty("--p", "0");
         if (subEl) subEl.textContent = "放開了……再按住一次";
         if (countEl) countEl.textContent = "3";
       };
 
       if (countEl) countEl.textContent = "3";
       if (subEl) subEl.textContent = "一起把命運按下去";
+      gate.style.setProperty("--p", "0");
       gate.classList.add("show");
       gate.setAttribute("aria-hidden", "false");
       gate.addEventListener("pointerdown", onDown);
@@ -1600,30 +1629,24 @@
     audioCue("battle.gather", { group: "presentation" });
     await wait(560 * fast);
 
-    // === ACT 2: 魔王降臨。優先播使用者提供的降臨影片，缺片才用原本的立繪動畫 ===
+    // === ACT 2: 魔王降臨。就是這支影片，沒有別的演出 ===
+    // 睿哥指定：拿掉「魔王小圖飛進來撞擊」那套設計（立繪 enter + impactFx），
+    // 也不要在影片播完後把小圖砸上來。魔王立繪從 ACT 3A 才進場。
     setAct("arrival");
     stage.classList.add("dark");
     setBanner(isDoom ? "魔王降臨——它要挑一個人帶走" : "魔王降臨！！");
     audioCue("boss.enter", { group: "presentation" });
-    const arrivalPlayed = await playStageClip(
+    await playStageClip(
       video,
       "assets/videos/mobile/boss/arrival.mp4",
-      7100 * fast,
-      { poster: artUrl("assets/videos/poster/boss/arrival.jpg") }
+      9000 * fast,
+      {
+        poster: artUrl("assets/videos/poster/boss/arrival.jpg"),
+        readyMs: 8000,
+        untilEnded: true,
+      }
     );
-    if (!arrivalPlayed) {
-      boss.style.setProperty("--boss-enter-ms", `${Math.max(1, 520 * fast)}ms`);
-      boss.classList.add("show", "enter");
-      impactFx("#cf73ff");
-      await wait(130 * fast);
-      audioCue("boss.roar", { group: "presentation", volume: 0.72 });
-      await wait(390 * fast);
-      boss.classList.remove("enter");
-    } else {
-      boss.classList.add("show");
-      audioCue("boss.roar", { group: "presentation", volume: 0.72 });
-      impactFx("#cf73ff");
-    }
+    audioCue("boss.roar", { group: "presentation", volume: 0.72 });
 
     const attackSources = await attackSourcesPromise;
 

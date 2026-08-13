@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/game.css?v=3" />
-  <link rel="stylesheet" href="css/revamp.css?v=26" />
+  <link rel="stylesheet" href="css/revamp.css?v=27" />
   <!-- 魔王立繪先抓：ACT2 一到就要顯示，晚了會是空的（4G 上尤其明顯） -->
   <link rel="preload" as="image" href="assets/boss_model_v3.webp" type="image/webp" fetchpriority="high" />
 </head>
@@ -221,7 +221,16 @@
         <div class="fx-flash" id="fx-flash"></div>
         <!-- 命運一擊：全員按住螢幕蓄力後揭曉（純儀式，不影響結果） -->
         <div class="strike-gate" id="strike-gate" aria-hidden="true">
-          <div class="strike-ring" id="strike-ring"><i></i></div>
+          <!-- 命運魔法陣：暗版永遠在，亮版隨按住進度浮現，
+               四個符文小圓依 25%／50%／75%／100% 逐一亮起（見 css/revamp.css） -->
+          <div class="fate-circle" aria-hidden="true">
+            <img class="fc-layer fc-dim" src="assets/deco/fate_circle_dim.webp?v=1" alt="" width="640" height="640" decoding="async" fetchpriority="low" />
+            <img class="fc-layer fc-lit" src="assets/deco/fate_circle_lit.webp?v=1" alt="" width="640" height="640" decoding="async" fetchpriority="low" />
+            <i class="fc-rune" data-rune="0"></i>
+            <i class="fc-rune" data-rune="1"></i>
+            <i class="fc-rune" data-rune="2"></i>
+            <i class="fc-rune" data-rune="3"></i>
+          </div>
           <p class="strike-title">全員按住螢幕</p>
           <p class="strike-sub" id="strike-sub">一起把命運按下去</p>
           <div class="strike-count" id="strike-count">3</div>
@@ -338,6 +347,6 @@
   <script src="js/videoPlayer.js?v=28"></script>
   <script src="js/audioDirector.js?v=6"></script>
   <script src="js/victoryFilm.js?v=12"></script>
-  <script src="js/game.js?v=56"></script>
+  <script src="js/game.js?v=57"></script>
 </body>
 </html>

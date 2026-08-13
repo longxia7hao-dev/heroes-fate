@@ -2180,7 +2180,8 @@ body::after {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  background: radial-gradient(ellipse at 50% 48%, rgba(38, 12, 70, 0.72), rgba(6, 2, 14, 0.93) 70%);
+  /* 稿子裡魔王是看得見的：底色壓淡一點，讓它透過來 */
+  background: radial-gradient(ellipse at 50% 48%, rgba(24, 6, 48, 0.28), rgba(6, 2, 14, 0.78) 72%);
   transition: opacity 180ms ease, visibility 0s linear 180ms;
   touch-action: none;
   -webkit-user-select: none;
@@ -2192,27 +2193,69 @@ body::after {
   pointer-events: auto;
   transition: opacity 180ms ease;
 }
-.strike-ring {
-  --p: 0;
+/**
+ * 命運魔法陣（睿哥提供的兩張圖：暗版 → 亮版）。
+ * `--p` 是按住進度 0→1，由 game.js 每一幀寫在 .strike-gate 上。
+ * 暗版永遠在，亮版隨進度浮現，四個符文小圓再逐一點亮 —— 放手 `--p` 歸零，整組回到暗版。
+ */
+.fate-circle {
   position: relative;
-  width: min(52vw, 210px);
+  width: min(78vw, 330px);
   aspect-ratio: 1;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background:
-    conic-gradient(#ffe08a calc(var(--p) * 360deg), rgba(255, 224, 138, 0.14) 0),
-    radial-gradient(circle, rgba(10, 4, 22, 0.9) 62%, transparent 63%);
-  box-shadow: 0 0 34px rgba(255, 206, 98, 0.28), inset 0 0 26px rgba(0, 0, 0, 0.5);
+  display: block;
 }
-.strike-ring::after {
-  content: "";
+.fc-layer {
   position: absolute;
-  inset: 12%;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 224, 138, 0.5);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  /* 素材是黑底發光，screen 讓黑的部分消失、只留光，才不會蓋成一塊暗方塊 */
+  mix-blend-mode: screen;
+  pointer-events: none;
 }
-.strike-gate.charging .strike-ring {
+.fc-dim { opacity: 0.9; }
+/* 整體漸亮只推到 0.6，剩下的亮度留給四個符文，才看得出「逐一亮起」 */
+.fc-lit { opacity: clamp(0, calc(var(--p, 0) * 0.6), 0.6); }
+/**
+ * 四個符文小圓：同一張亮版圖、同一個框，只是各自裁出一個圓，
+ * 所以位置一定對得上（不必另外切圖）。座標量自原始素材。
+ */
+.fc-rune {
+  position: absolute;
+  inset: 0;
+  background-image: url("../assets/deco/fate_circle_lit.webp?v=1");
+  background-size: 100% 100%;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  opacity: 0;
+  filter: drop-shadow(0 0 10px rgba(214, 130, 255, 0.75));
+}
+/* 用羽化的遮罩而不是硬邊 clip-path：硬邊會變成「貼上一顆發光圓球」，
+   羽化之後才像那個符文自己亮起來，邊緣融進暗版魔法陣裡 */
+.fc-rune[data-rune="0"] {
+  -webkit-mask-image: radial-gradient(ellipse 9% 9% at 50% 23.8%, #000 48%, rgba(0, 0, 0, 0) 100%);
+  mask-image: radial-gradient(ellipse 9% 9% at 50% 23.8%, #000 48%, rgba(0, 0, 0, 0) 100%);
+}
+.fc-rune[data-rune="1"] {
+  -webkit-mask-image: radial-gradient(ellipse 9% 9% at 72.7% 50.2%, #000 48%, rgba(0, 0, 0, 0) 100%);
+  mask-image: radial-gradient(ellipse 9% 9% at 72.7% 50.2%, #000 48%, rgba(0, 0, 0, 0) 100%);
+}
+.fc-rune[data-rune="2"] {
+  -webkit-mask-image: radial-gradient(ellipse 9% 9% at 50% 76.6%, #000 48%, rgba(0, 0, 0, 0) 100%);
+  mask-image: radial-gradient(ellipse 9% 9% at 50% 76.6%, #000 48%, rgba(0, 0, 0, 0) 100%);
+}
+.fc-rune[data-rune="3"] {
+  -webkit-mask-image: radial-gradient(ellipse 9% 9% at 25.2% 50.2%, #000 48%, rgba(0, 0, 0, 0) 100%);
+  mask-image: radial-gradient(ellipse 9% 9% at 25.2% 50.2%, #000 48%, rgba(0, 0, 0, 0) 100%);
+}
+/* 25%／50%／75%／100% 各點亮一個；乘數大＝亮得乾脆，不會拖成慢慢淡入 */
+.fc-rune[data-rune="0"] { opacity: clamp(0, calc((var(--p, 0) - 0.22) * 18), 1); }
+.fc-rune[data-rune="1"] { opacity: clamp(0, calc((var(--p, 0) - 0.45) * 18), 1); }
+.fc-rune[data-rune="2"] { opacity: clamp(0, calc((var(--p, 0) - 0.68) * 18), 1); }
+/* 第四個要在 3 秒到之前就全亮 —— 四個都亮了才揭曉最後一擊的獲勝者 */
+.fc-rune[data-rune="3"] { opacity: clamp(0, calc((var(--p, 0) - 0.90) * 18), 1); }
+.strike-gate.charging .fate-circle {
   animation: strike-pulse 620ms ease-in-out infinite alternate;
 }
 @keyframes strike-pulse {
@@ -2220,14 +2263,14 @@ body::after {
   to { transform: scale(1.045); }
 }
 .strike-count {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  /* 原本絕對置中會蓋住魔法陣中央的六芒星，改成跟著版面走的小字 */
+  position: static;
+  transform: none;
   color: #fff3c8;
-  font-size: clamp(2.4rem, 13vw, 4rem);
+  font-size: clamp(1.1rem, 5vw, 1.5rem);
   font-weight: 900;
-  text-shadow: 0 0 20px rgba(255, 206, 98, 0.6);
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 14px rgba(255, 206, 98, 0.55);
   pointer-events: none;
 }
 .strike-title {
