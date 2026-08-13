@@ -455,10 +455,19 @@ SOUNDS = {
     "boss_defeat": (boss_defeat, 128),
     "smoke_burst": (smoke_burst, 112),
     "reveal_chime": (reveal_chime, 128),
-    "victory_fanfare": (victory_fanfare, 144),
-    "party_horn": (party_horn, 112),
     "fate_strike": (fate_strike, 128),
 }
+
+# ⚠️ 這兩個**已經改用睿哥提供的真實錄音**，故意不放進 SOUNDS：
+#
+#   victory_fanfare  ← 影片 6e652590 的 4.02–7.22s（v1.22）
+#   party_horn       ← 影片 bae80648 的完整 3.0s（v1.23）
+#
+# 兩者都由 `tools/import_scene_bgm.py` 從影片音軌匯入。下面的
+# `victory_fanfare()` 與 `party_horn()` 只留作歷史參考 ——
+# **不要把它們接回 SOUNDS**，一旦重跑 `python3 tools/gen_sfx_v2.py`
+# 就會把真實錄音蓋回合成版。（`tools/generate_audio.py` 已經因為同樣的
+# 原因把 15 個 sfx 全部移出 jobs，見 2026-08-14 v1.16。）
 
 
 def encode_mp3(stereo_audio: np.ndarray, target: Path, bitrate: int) -> None:

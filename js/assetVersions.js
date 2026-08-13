@@ -197,7 +197,7 @@ window.HF_ASSET_V = {
 "assets/audio/sfx/boss_roar.mp3":"7c648612ee",
 "assets/audio/sfx/boss_stinger.mp3":"4d3d72f8bd",
 "assets/audio/sfx/fate_strike.mp3":"7be8a868b6",
-"assets/audio/sfx/party_horn.mp3":"d3e73ff7ee",
+"assets/audio/sfx/party_horn.mp3":"e341df7aba",
 "assets/audio/sfx/reveal_chime.mp3":"faf0a578a7",
 "assets/audio/sfx/smoke_burst.mp3":"a1e6e0c7f3",
 "assets/audio/sfx/ui_click.mp3":"4155ed4255",
