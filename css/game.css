@@ -555,7 +555,7 @@ html, body {
   to { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; }
 }
 .boss-img {
-  width: 100%; display: block;
+  width: 100%; height: auto; display: block;
   filter: drop-shadow(0 0 24px #a855f7aa) drop-shadow(0 10px 0 #0006);
 }
 .boss-label {

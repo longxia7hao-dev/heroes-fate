@@ -1812,7 +1812,8 @@ body::after {
   animation: boss-aura 1.8s ease-in-out infinite alternate;
 }
 @keyframes boss-aura { to { opacity: .55; transform: translate(-50%, -50%) scale(1.13); } }
-.boss-img { width: 100%; filter: drop-shadow(0 0 18px rgba(190,100,255,.84)) drop-shadow(0 18px 22px rgba(0,0,0,.74)); }
+.boss picture { display: block; width: 100%; }
+.boss-img { width: 100%; height: auto; filter: drop-shadow(0 0 18px rgba(190,100,255,.84)) drop-shadow(0 18px 22px rgba(0,0,0,.74)); }
 .boss-label {
   width: max-content;
   margin: -0.3rem auto 0;

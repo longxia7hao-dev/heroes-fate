@@ -62,9 +62,18 @@ window.HF_VideoPlayer = (() => {
     });
   }
 
+  /**
+   * 逐檔內容雜湊優先（見 tools/gen_asset_versions.py）。
+   * 這樣只換一支影片時，其他 69 支的網址不變，手機不會整包重抓；
+   * 版本表還沒載入或查不到時才退回全域 MEDIA_VERSION。
+   */
+  function assetVersion(path, fallback) {
+    return window.HF_ASSET_V?.[path] || fallback;
+  }
+
   function versioned(url) {
     if (!url) return null;
-    return url + (url.includes("?") ? "&" : "?") + `v=${MEDIA_VERSION}`;
+    return url + (url.includes("?") ? "&" : "?") + `v=${assetVersion(url, MEDIA_VERSION)}`;
   }
 
   /**
@@ -119,7 +128,8 @@ window.HF_VideoPlayer = (() => {
 
     function primeStill(id) {
       if (!id) return;
-      still.src = `assets/heroes/${id}.png?v=${ART_VERSION}`;
+      const p = `assets/heroes/${id}.png`;
+      still.src = `${p}?v=${assetVersion(p, ART_VERSION)}`;
       still.hidden = false;
     }
 

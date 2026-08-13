@@ -169,14 +169,21 @@
 
   /** 立繪／頭像的快取版本：換圖時必須連帶提高，否則手機會一直吃舊快取 */
   const ART_VERSION = "4";
+  /**
+   * 圖檔網址一律走這裡：優先用 tools/gen_asset_versions.py 產生的逐檔雜湊，
+   * 查不到才退回全域 ART_VERSION。只換幾張圖時，其餘圖的網址不變 → 手機不重抓。
+   */
+  function artUrl(path) {
+    return `${path}?v=${window.HF_ASSET_V?.[path] || ART_VERSION}`;
+  }
 
   function heroImg(id) {
-    return `assets/heroes/${id}.png?v=${ART_VERSION}`;
+    return artUrl(`assets/heroes/${id}.png`);
   }
 
   /** 選角縮圖：雲端「選擇角色縮圖」頭像（3:4） */
   function heroThumb(id) {
-    return `assets/heroes/portraits/${id}.jpg?v=${ART_VERSION}`;
+    return artUrl(`assets/heroes/portraits/${id}.jpg`);
   }
 
   function playerLabel(i) {
@@ -843,7 +850,7 @@
       const img = new Image();
       img.decoding = "async";
       try { img.fetchPriority = "high"; } catch (_) {}
-      img.src = `assets/videos/poster/${kind}/${id}.jpg?v=${ART_VERSION}`;
+      img.src = artUrl(`assets/videos/poster/${kind}/${id}.jpg`);
       posterWarmRefs.push(img);
     });
   }
@@ -953,7 +960,7 @@
 
     try {
       video.pause();
-      video.poster = `assets/videos/poster/final/${hero.id}.jpg?v=${ART_VERSION}`;
+      video.poster = artUrl(`assets/videos/poster/final/${hero.id}.jpg`);
       video.src = window.HF_VideoPlayer?.versioned
         ? window.HF_VideoPlayer.versioned(url)
         : url;
@@ -1022,7 +1029,7 @@
 
         video.pause();
         // 首幀圖與影片同比例，載入中先頂著，避免黑畫面
-        video.poster = `assets/videos/poster/attack/${h.id}.jpg?v=${ART_VERSION}`;
+        video.poster = artUrl(`assets/videos/poster/attack/${h.id}.jpg`);
         video.src = window.HF_VideoPlayer?.versioned
           ? window.HF_VideoPlayer.versioned(source)
           : source;
@@ -1540,7 +1547,7 @@
       video,
       "assets/videos/mobile/boss/arrival.mp4",
       7100 * fast,
-      { poster: `assets/videos/poster/boss/arrival.jpg?v=${ART_VERSION}` }
+      { poster: artUrl("assets/videos/poster/boss/arrival.jpg") }
     );
     if (!arrivalPlayed) {
       boss.style.setProperty("--boss-enter-ms", `${Math.max(1, 520 * fast)}ms`);
