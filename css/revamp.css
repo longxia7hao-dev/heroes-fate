@@ -1959,10 +1959,15 @@ body::after {
   object-fit: cover;
   object-position: center;
 }
-/* 攻擊切入永遠不顯示方形立繪：比例與影片不同，會造成畫面先變形再恢復 */
-.hero-cut-poster { display: none !important; }
-/* 切入一開就讓影片元素可見，載入中會顯示同比例的 poster 首幀而不是黑畫面 */
-.hero-cut-video { opacity: 1; background: #090315; transition: opacity 140ms ease; }
+/**
+ * 切入的頂替圖：用選角卡那張已在快取裡的頭像（13KB，0 位元組就能顯示），
+ * 以 cover 裁切不會變形 —— 當年停用它是因為方形立繪比例不同會變形，cover 沒這問題。
+ * 影片元素在真的開播（.is-playing）之前保持透明，這樣就不會看到
+ * 上一位角色殘留的 poster、或只解碼一半的首幀壓在黑底上。
+ */
+.hero-cut-poster { display: block; }
+.hero-cut-video { opacity: 0; background: transparent; transition: opacity 140ms ease; }
+.hero-cut.is-playing .hero-cut-video { opacity: 1; background: #090315; }
 .hero-cut-shade {
   position: absolute;
   inset: 0;

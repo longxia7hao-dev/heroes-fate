@@ -458,7 +458,7 @@
           .filter(Boolean)
           .join(" ");
         const img = p.heroId
-          ? `<img src="${heroImg(p.heroId)}" alt="" />`
+          ? `<img src="${heroThumb(p.heroId)}" alt="" />`
           : `<span>${i + 1}</span>`;
         const title = p.heroId
           ? `${playerLabel(i)} · ${heroById(p.heroId)?.name || p.heroId}`
@@ -857,7 +857,7 @@
       const winner = slot === winnerSlot ? " winner" : "";
       return `<div class="battle-hud-badge${active}${winner}" style="--hc:${h.color}"
         title="${playerLabel(slot)} · ${h.name}" ${active ? 'aria-current="true"' : ""}>
-        <img src="${heroImg(h.id)}" alt="" />
+        <img src="${heroThumb(h.id)}" alt="" />
         <span>${slot + 1}</span>
       </div>`;
     }).join("");
@@ -900,7 +900,8 @@
       if (!id) return;
       const img = new Image();
       img.decoding = "async";
-      try { img.fetchPriority = "high"; } catch (_) {}
+      // 低優先：poster 只是頂替用，搶在攻擊影片前面反而害它更慢
+      try { img.fetchPriority = "low"; } catch (_) {}
       img.src = artUrl(`assets/videos/poster/${kind}/${id}.jpg`);
       posterWarmRefs.push(img);
     });
@@ -1005,6 +1006,8 @@
     $("#hero-cut-player").textContent = playerLabel(player.slot ?? 0);
     $("#hero-cut-name").textContent = hero.name;
     $("#hero-cut-weapon").textContent = "終結一擊";
+    const finalStill = $("#hero-cut-poster");
+    if (finalStill) finalStill.src = heroThumb(hero.id);
     root.setAttribute("aria-hidden", "false");
     root.classList.add("show");
     root.classList.remove("can-tap");
@@ -1071,6 +1074,12 @@
         setBanner(`${playerLabel(p.slot ?? i)} · ${h.name} 出擊！`);
         renderBattleHud(players, p.slot ?? i);
 
+        // 先把頂替圖換成這一位的頭像，並收回上一位的影片畫面，
+        // 否則慢速網路下會看到上一位角色的 poster 還壓在畫面上（名字卻已經換人）。
+        const cutStill = $("#hero-cut-poster");
+        if (cutStill) cutStill.src = heroThumb(h.id);
+        root.classList.remove("is-playing");
+
         const source = sources.get(h.id);
         if (!source) {
           window.HF_Audio?.playHeroAttack?.(h.id);
@@ -1129,7 +1138,7 @@
         const dim = highlightId && h.id !== highlightId ? " dim" : "";
         const atk = attack && h.id === highlightId ? " attack" : "";
         return `<div class="stage-hero${hi}${dim}${atk}" style="--hc:${h.color}">
-          <img src="${heroImg(h.id)}" alt="${h.name}" />
+          <img src="${heroThumb(h.id)}" alt="${h.name}" />
           <span>${playerLabel(p.slot ?? i)}</span>
           <small>${h.name}</small>
         </div>`;

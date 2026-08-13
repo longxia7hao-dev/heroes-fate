@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/game.css?v=3" />
-  <link rel="stylesheet" href="css/revamp.css?v=24" />
+  <link rel="stylesheet" href="css/revamp.css?v=25" />
   <!-- 魔王立繪先抓：ACT2 一到就要顯示，晚了會是空的（4G 上尤其明顯） -->
   <link rel="preload" as="image" href="assets/boss_model_v3.webp" type="image/webp" fetchpriority="high" />
 </head>
@@ -205,7 +205,8 @@
           <div class="spotlight" id="spotlight"></div>
         </div>
         <div class="hero-cut" id="hero-cut" aria-hidden="true">
-          <img class="hero-cut-poster" id="hero-cut-poster" src="assets/heroes/knight.png?v=2" alt="" />
+          <!-- src 由 game.js 逐位角色設成該角的選角頭像（已在快取裡），不預先寫死 -->
+          <img class="hero-cut-poster" id="hero-cut-poster" alt="" />
           <video class="hero-cut-video" id="hero-cut-video" playsinline webkit-playsinline muted preload="metadata"></video>
           <div class="cut-tap-hint" id="cut-tap-hint" aria-hidden="true">點一下跳下一位</div>
           <div class="hero-cut-shade"></div>
@@ -337,6 +338,6 @@
   <script src="js/videoPlayer.js?v=27"></script>
   <script src="js/audioDirector.js?v=6"></script>
   <script src="js/victoryFilm.js?v=12"></script>
-  <script src="js/game.js?v=54"></script>
+  <script src="js/game.js?v=55"></script>
 </body>
 </html>
