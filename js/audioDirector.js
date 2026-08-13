@@ -11,7 +11,12 @@ window.HF_Audio = (() => {
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
   const STORE_KEY = "hf_audio_v1";
   const REV = "4";
-  const asset = (path) => `${path}?v=${REV}`;
+  /**
+   * 逐檔內容雜湊優先（表由 tools/gen_asset_versions.py 產生）。
+   * 只換掉幾個音效時，其餘 40 幾支的網址不變 —— 尤其那 4MB 的角色 BGM
+   * 不會因為改了一顆 UI 音效就在 4G 上整包重抓。查不到才退回全域 REV。
+   */
+  const asset = (path) => `${path}?v=${window.HF_ASSET_V?.[path] || REV}`;
 
   const musicTracks = {
     home: asset("assets/audio/bgm/home_custom.mp3"),

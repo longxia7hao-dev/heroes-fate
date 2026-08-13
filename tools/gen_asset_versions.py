@@ -30,6 +30,8 @@ PATTERNS = [
     "assets/videos/poster/**/*.jpg",
     "assets/heroes/*.png",
     "assets/heroes/portraits/*.jpg",
+    # 音檔：換掉幾個音效時，其餘 40 幾支（含 4MB 的角色 BGM）網址不變、不重抓
+    "assets/audio/**/*.mp3",
     "assets/boss_model_v*.png",
     "assets/boss_model_v*.webp",
     "assets/bg_battle_arena_v2.jpg",
