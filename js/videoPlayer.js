@@ -131,9 +131,14 @@ window.HF_VideoPlayer = (() => {
       badge.textContent = text;
     }
 
+    /**
+     * 頂替用的靜圖一律用**選角卡那張 240×322 頭像**（13KB），不要用 512×512 立繪（280KB）。
+     * 頭像在選角格上已經顯示過、必定在快取裡，所以是 0 位元組就能立刻出現；
+     * 立繪反而會在網路已經塞爆時再排一個 280KB 的請求，結果就是破圖的 ?。
+     */
     function primeStill(id) {
       if (!id) return;
-      const p = `assets/heroes/${id}.png`;
+      const p = `assets/heroes/portraits/${id}.jpg`;
       still.src = `${p}?v=${assetVersion(p, ART_VERSION)}`;
       still.hidden = false;
     }

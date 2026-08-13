@@ -267,12 +267,28 @@
   const waitPrefetchPool = [];
   let waitPrefetchStarted = false;
 
+  /**
+   * 放掉一支預抓影片，並中止它還沒下載完的部分。
+   * `preload="auto"` 的 video 就算已經 canplay 也會**繼續**把整支抓完，
+   * 13 支疊起來就是 13 條連線在背景吃頻寬 —— 4G 上這是致命的。
+   */
+  function releaseWaitClip(el) {
+    if (!el) return;
+    try {
+      el.removeAttribute("src");
+      el.load();
+    } catch (_) {}
+  }
+
   /** 選角舞台正在等影片就緒時暫停預抓（上限 6 秒，避免整串卡死） */
   async function yieldToActivePick() {
     const busy = () => {
       const st = pickVideo?.el?.dataset?.state;
       return st === "loading" || st === "confirm-loading";
     };
+    if (!busy()) return;
+    // 玩家正盯著舞台等 → 背景那幾條連線立刻收掉，頻寬全給他眼前那一支
+    while (waitPrefetchPool.length) releaseWaitClip(waitPrefetchPool.pop());
     const until = performance.now() + 6000;
     while (busy() && performance.now() < until) {
       await new Promise((r) => setTimeout(r, 200));
@@ -287,6 +303,8 @@
     } catch (_) {
       return;
     }
+    // 連續幾支都慢就整串停掉：這條線路撐不起預抓，硬抓只會害玩家眼前那支更慢
+    let slowStrikes = 0;
     for (const hero of HEROES) {
       // 玩家眼前那支還在載的時候先讓路：預抓是排隊在後面的 13 支，
       // 搶了頻寬就會變成「點了角色卻停在空舞台」（龍騎士排最後最明顯）。
@@ -299,24 +317,41 @@
       el.playsInline = true;
       el.src = window.HF_VideoPlayer.versioned(url);
       try { el.load(); } catch (_) {}
-      waitPrefetchPool.push(el);
+      const startedAt = performance.now();
       // 一支一支來，避免同時開 13 條連線把頻寬吃光
-      await new Promise((resolve) => {
+      const ready = await new Promise((resolve) => {
         let done = false;
-        const fin = () => {
+        const fin = (ok) => {
           if (done) return;
           done = true;
           clearTimeout(t);
-          el.removeEventListener("canplaythrough", fin);
-          el.removeEventListener("canplay", fin);
-          el.removeEventListener("error", fin);
-          resolve();
+          el.removeEventListener("canplaythrough", onOk);
+          el.removeEventListener("canplay", onOk);
+          el.removeEventListener("error", onBad);
+          resolve(ok);
         };
-        el.addEventListener("canplaythrough", fin, { once: true });
-        el.addEventListener("canplay", fin, { once: true });
-        el.addEventListener("error", fin, { once: true });
-        const t = setTimeout(fin, 2500);
+        const onOk = () => fin(true);
+        const onBad = () => fin(false);
+        el.addEventListener("canplaythrough", onOk, { once: true });
+        el.addEventListener("canplay", onOk, { once: true });
+        el.addEventListener("error", onBad, { once: true });
+        const t = setTimeout(() => fin(false), 2500);
       });
+      const tookMs = performance.now() - startedAt;
+
+      if (ready) {
+        // 同時間最多留 2 支在背景把剩下的抓完，其餘放掉
+        waitPrefetchPool.push(el);
+        while (waitPrefetchPool.length > 2) releaseWaitClip(waitPrefetchPool.shift());
+      } else {
+        releaseWaitClip(el);
+      }
+
+      if (!ready || tookMs > 2000) {
+        if (++slowStrikes >= 2) break;
+      } else {
+        slowStrikes = 0;
+      }
     }
   }
 

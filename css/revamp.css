@@ -1602,6 +1602,21 @@ body::after {
   opacity: 1;
   transition: none;
 }
+/**
+ * 頂替用的靜圖只能站在兩隻石龍中間的召喚陣上，不可以蓋掉石雕。
+ * 直式影片以 contain 落在中央那一條（14 支裡有 13 支是 720×1270），
+ * 靜圖就用同一個 720/1270 的框 + cover，footprint 與影片完全一致。
+ */
+#screen-pick .vp-still {
+  left: 50%;
+  right: auto;
+  width: auto;
+  height: 100%;
+  aspect-ratio: 720 / 1270;
+  transform: translateX(-50%) !important;
+  object-fit: cover !important;
+  object-position: center center !important;
+}
 #screen-pick .pdot { padding: 0; color: inherit; font-family: inherit; cursor: pointer; }
 
 /* New five-row mode-card content. */
