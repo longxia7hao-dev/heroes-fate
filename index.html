@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/game.css?v=3" />
-  <link rel="stylesheet" href="css/revamp.css?v=27" />
+  <link rel="stylesheet" href="css/revamp.css?v=28" />
   <!-- 魔王立繪先抓：ACT2 一到就要顯示，晚了會是空的（4G 上尤其明顯） -->
   <link rel="preload" as="image" href="assets/boss_model_v3.webp" type="image/webp" fetchpriority="high" />
 </head>
@@ -58,6 +58,13 @@
             <span><b id="audio-activate-title">點一下開啟完整音效</b><small id="audio-activate-sub">背景音樂＋角色招式＋魔王怒吼</small></span>
           </button>
         </div>
+        <!--
+          版本印記：手機看到的到底是不是最新版，一眼就知道。
+          index.html 本身被 Safari 快取住時（GitHub Pages 給 max-age=600，
+          而且開著不重整就永遠不會重抓），所有 ?v= 都不會生效 ——
+          那時這行會停在舊版本號，或整行不存在。**改版時記得改這裡。**
+        -->
+        <p class="build-stamp">v1.12 · 0814-0130</p>
       </div>
     </section>
 

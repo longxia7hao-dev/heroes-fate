@@ -2712,3 +2712,15 @@ body::after {
     animation-delay: 0ms !important;
   }
 }
+
+/* 版面右下角的版本印記：用來判斷手機拿到的是不是最新版（見 index.html 的說明） */
+.build-stamp {
+  margin: 0.55rem 0 0;
+  text-align: center;
+  color: rgba(214, 198, 240, 0.42);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  font-variant-numeric: tabular-nums;
+  user-select: text;
+  -webkit-user-select: text;
+}
