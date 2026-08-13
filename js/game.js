@@ -168,7 +168,7 @@
   }
 
   /** 立繪／頭像的快取版本：換圖時必須連帶提高，否則手機會一直吃舊快取 */
-  const ART_VERSION = "3";
+  const ART_VERSION = "4";
 
   function heroImg(id) {
     return `assets/heroes/${id}.png?v=${ART_VERSION}`;
@@ -557,7 +557,10 @@
           id,
           "confirm",
           PICK_CONFIRM_MAX_MS,
-          nextWaitHero?.id || null
+          nextWaitHero?.id || null,
+          // 點一下就跳過鎖定動畫，直接換下一位待命；想看完的人不點就好。
+          // tapTarget 用整個舞台座（比影片框大，手機好按）。
+          { tapSkip: true, tapTarget: $("#screen-pick .model-pedestal") || undefined }
         );
       } catch (e) {
         console.warn("confirm video failed", e);

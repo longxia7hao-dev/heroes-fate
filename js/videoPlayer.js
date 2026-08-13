@@ -6,7 +6,9 @@
  */
 window.HF_VideoPlayer = (() => {
   const MANIFEST_VERSION = "13";
-  const MEDIA_VERSION = "13";
+  const MEDIA_VERSION = "14";
+  /** 立繪／頭像／poster 的版本，必須與 game.js 的 ART_VERSION 一致 */
+  const ART_VERSION = "4";
   /** 攻擊／勝利短片維持現有節奏；選角確定片必須以原始速度完整播放。 */
   const CLIP_RATE = 1.3;
   const CONFIRM_RATE = 1;
@@ -117,7 +119,7 @@ window.HF_VideoPlayer = (() => {
 
     function primeStill(id) {
       if (!id) return;
-      still.src = `assets/heroes/${id}.png?v=2`;
+      still.src = `assets/heroes/${id}.png?v=${ART_VERSION}`;
       still.hidden = false;
     }
 
@@ -265,7 +267,7 @@ window.HF_VideoPlayer = (() => {
     /**
      * Play once; always resolves within maxMs.
      */
-    function playOnce(id, playKind = "confirm", maxMs = 4200, nextWaitId = null) {
+    function playOnce(id, playKind = "confirm", maxMs = 4200, nextWaitId = null, opts = {}) {
       return new Promise(async (resolve) => {
         if (destroyed || !id) return resolve();
         const token = ++playToken;
@@ -276,10 +278,23 @@ window.HF_VideoPlayer = (() => {
         const maxTotalMs = Math.max(450, maxMs | 0);
         const startedAt = performance.now();
 
+        // 點一下就收掉這段動畫（想看完的人就別點）。等到影片真的開始播才算，
+        // 並留一段寬限期，免得按「決定」那一下的殘留觸控立刻把動畫跳掉。
+        const tapSkip = !!opts.tapSkip;
+        const tapGraceMs = Number.isFinite(opts.tapGraceMs) ? opts.tapGraceMs : 500;
+        const tapTarget = opts.tapTarget || root;
+        let playStartedAt = 0;
+        const onTap = () => {
+          if (settled || !playStartedAt) return;
+          if (performance.now() - playStartedAt < tapGraceMs) return;
+          finish();
+        };
+
         const finish = () => {
           if (settled) return;
           settled = true;
           if (timer) clearTimeout(timer);
+          if (tapSkip) tapTarget.removeEventListener("click", onTap);
           target?.removeEventListener("ended", onEnded);
           target?.removeEventListener("error", onError);
           setBadge("");
@@ -300,7 +315,8 @@ window.HF_VideoPlayer = (() => {
         const onEnded = () => finish();
         const onError = () => finish();
 
-        setBadge(playKind === "confirm" ? "鎖定中…" : "播放中…");
+        const baseBadge = playKind === "confirm" ? "鎖定中…" : "播放中…";
+        setBadge(tapSkip ? `${baseBadge}　點一下跳過` : baseBadge);
         root.classList.toggle("vp-confirm", playKind === "confirm");
         setState("confirm-loading");
         timer = setTimeout(finish, maxTotalMs);
@@ -353,6 +369,8 @@ window.HF_VideoPlayer = (() => {
           if (destroyed || token !== playToken || settled) return finish();
           activateVideo(target, token);
           setState("playing");
+          playStartedAt = performance.now();
+          if (tapSkip) tapTarget.addEventListener("click", onTap);
           if (nextWaitId) primeMedia(nextWaitId, "wait");
         } catch (_) {
           finish();

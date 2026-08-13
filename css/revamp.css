@@ -1785,7 +1785,7 @@ body::after {
   left: 50%;
   top: 8%;
   z-index: 5;
-  width: min(285px, 67vw);
+  width: min(348px, 94vw);
   opacity: 0;
   transform: translateX(-50%) translateY(-14px) scale(.9);
   transition: opacity 300ms ease, transform 420ms cubic-bezier(.2,.8,.2,1), filter 220ms ease;
@@ -2124,7 +2124,8 @@ body::after {
   #screen-home .home-brand .tagline { font-size: .78rem; }
   #screen-home .home-panel { padding-block: .72rem .62rem; }
   #screen-mode .mode-card { min-height: 116px; }
-  .boss { top: 6%; width: min(250px, 62vw); }
+  /* 魔王立繪自 v1.9 換成展翼版（比例 1.69 偏寬），寬度要跟著放大才不會又扁又小 */
+  .boss { top: 6%; width: min(305px, 87vw); }
   .hero-cut-meta { bottom: calc(4.2rem + env(safe-area-inset-bottom, 0px)); }
 }
 

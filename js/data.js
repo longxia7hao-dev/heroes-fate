@@ -19,7 +19,7 @@ window.HF_DATA = {
     },
     {
       id: "ranger",
-      name: "遊俠",
+      name: "暗夜精靈",
       color: "#81c784",
       weapon: "長弓",
       flavor: "第三箭，已經在路上。",
@@ -27,7 +27,7 @@ window.HF_DATA = {
     },
     {
       id: "orc_archer",
-      name: "半獸人射手",
+      name: "光之精靈",
       color: "#9ccc65",
       weapon: "戰弓",
       flavor: "哈！這一箭，砸穿命運！",
@@ -43,7 +43,7 @@ window.HF_DATA = {
     },
     {
       id: "amazon",
-      name: "女戰士",
+      name: "野蠻人",
       color: "#ff8a65",
       weapon: "鏈錘",
       flavor: "戰場，由我踩碎。",
@@ -51,7 +51,7 @@ window.HF_DATA = {
     },
     {
       id: "dark_fighter",
-      name: "暗黑武鬥家",
+      name: "武鬥宗師",
       color: "#ef5350",
       weapon: "雙拳",
       flavor: "熱血——超載！",
@@ -59,7 +59,7 @@ window.HF_DATA = {
     },
     {
       id: "assassin",
-      name: "黑袍刺客",
+      name: "暗影刺客",
       color: "#ab47bc",
       weapon: "紫影短刃",
       flavor: "……結束了。",
@@ -75,7 +75,7 @@ window.HF_DATA = {
     },
     {
       id: "dark_mage",
-      name: "黑暗法師",
+      name: "召喚師",
       color: "#7e57c2",
       weapon: "闇晶法杖",
       flavor: "黑暗，才是答案。",
@@ -83,7 +83,7 @@ window.HF_DATA = {
     },
     {
       id: "dark_elf",
-      name: "黑暗精靈",
+      name: "巫毒薩滿",
       color: "#66bb6a",
       weapon: "毒綠法杖",
       flavor: "暗影之森，早已選定獵物。",
