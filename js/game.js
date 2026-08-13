@@ -487,7 +487,11 @@
       console.warn("HF_VideoPlayer missing");
       return null;
     }
-    pickVideo = window.HF_VideoPlayer.create(el, {});
+    pickVideo = window.HF_VideoPlayer.create(el, {
+      // 影片真的開演才揭開舞台。在那之前維持空的召喚陣，
+      // 不拿立繪或頭像去頂（睿哥：進動畫前不要跑出角色的大頭圖案）。
+      onShown: () => $("#screen-pick .model-pedestal")?.classList.remove("is-empty"),
+    });
     return pickVideo;
   }
 
@@ -527,7 +531,9 @@
     if (weapon) weapon.textContent = h.weapon;
     if (flavor) flavor.textContent = `「${h.flavor}」`;
 
-    // 影片就緒前維持空舞台，就緒後才揭開，避免中間閃一張立繪
+    // 換角色先回到空的召喚陣：新影片還沒開演前，寧可留空，也不要顯示
+    // 上一位角色的畫面或任何角色靜圖。揭幕交給 onShown（影片真的在播才做）。
+    pedestal?.classList.add("is-empty");
     const vp = ensurePickVideo();
     if (vp && gen === previewGen) {
       try {
@@ -536,7 +542,6 @@
         console.warn("preview play failed", e);
       }
     }
-    if (gen === previewGen) pedestal?.classList.remove("is-empty");
   }
 
   function updatePickButtons() {
@@ -1006,8 +1011,6 @@
     $("#hero-cut-player").textContent = playerLabel(player.slot ?? 0);
     $("#hero-cut-name").textContent = hero.name;
     $("#hero-cut-weapon").textContent = "終結一擊";
-    const finalStill = $("#hero-cut-poster");
-    if (finalStill) finalStill.src = heroThumb(hero.id);
     root.setAttribute("aria-hidden", "false");
     root.classList.add("show");
     root.classList.remove("can-tap");
@@ -1074,10 +1077,9 @@
         setBanner(`${playerLabel(p.slot ?? i)} · ${h.name} 出擊！`);
         renderBattleHud(players, p.slot ?? i);
 
-        // 先把頂替圖換成這一位的頭像，並收回上一位的影片畫面，
-        // 否則慢速網路下會看到上一位角色的 poster 還壓在畫面上（名字卻已經換人）。
-        const cutStill = $("#hero-cut-poster");
-        if (cutStill) cutStill.src = heroThumb(h.id);
+        // 收回上一位的影片畫面：不清掉的話，慢速網路下會看到上一位角色的
+        // poster 還壓在畫面上（名字卻已經換人）。載入中維持深色底＋名牌，
+        // 不頂任何角色圖（睿哥指定）。
         root.classList.remove("is-playing");
 
         const source = sources.get(h.id);

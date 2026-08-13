@@ -13,10 +13,11 @@ window.HF_VideoPlayer = (() => {
   const CLIP_RATE = 1.3;
   const CONFIRM_RATE = 1;
   /**
-   * 待命片沒能在這時間內開播，就先亮立繪頂著。
-   * 4G 首次載入時影片要好幾秒，沒有這層舞台會一直停在空的召喚陣。
+   * 等到這麼久還沒開播就放棄等待，讓呼叫端往下走（舞台維持空的召喚陣）。
+   * 這只是保險：慢速網路上 `video.play()` 的 promise 會一直 pending，
+   * 沒有硬上限就會把呼叫端永遠掛住 —— 那正是「動畫從來沒出現」的原始 bug。
    */
-  const STILL_FALLBACK_MS = 260;
+  const REVEAL_GIVEUP_MS = 15000;
   let manifest = null;
   let manifestPromise = null;
 
@@ -153,11 +154,8 @@ window.HF_VideoPlayer = (() => {
       });
       root.classList.remove("vp-video-ready", "vp-confirm");
       setState("fallback");
-    }
-
-    /** 目前畫面上是否已經有影片在演（有的話就別用靜圖蓋掉它） */
-    function hasVisibleVideo() {
-      return videos.some((el) => el.classList.contains("is-active"));
+      // 整支缺檔的防呆路徑：這時沒有動畫要等了，靜圖就是最終畫面，舞台要揭開
+      try { opts.onShown?.(currentId); } catch (_) {}
     }
 
     function activateVideo(target, token) {
@@ -176,6 +174,10 @@ window.HF_VideoPlayer = (() => {
         : previous;
       still.hidden = true;
       root.classList.add("vp-video-ready");
+      // 影片真的上畫面了才通知呼叫端揭開舞台。放在這裡而不是 play() 裡，
+      // 是因為確定動畫（playOnce）走的是另一條路徑，漏掉它就會「動畫在
+      // 被隱藏的舞台裡播完」——玩家什麼都沒看到。
+      try { opts.onShown?.(currentId); } catch (_) {}
       return true;
     }
 
@@ -237,60 +239,60 @@ window.HF_VideoPlayer = (() => {
     }
 
     /**
-     * 「舞台上已經有東西了」的訊號。呼叫端（選角頁）靠它決定何時揭開舞台，
-     * 所以它必須在影片開播 **或** 立繪頂上時就 resolve —— 不能等 video.play()。
-     * 慢速網路上 play() 的 promise 會一直 pending，等它就等於永遠不揭開。
+     * 揭幕訊號：**只有影片真的開演**才 resolve(true)。
+     * 睿哥指定「進入任何動畫前不要跑出角色的大頭圖案」，所以載入中不頂任何靜圖，
+     * 舞台就維持空的召喚陣，等 `playing` 事件到了才揭開。
+     * 硬上限純粹是保險，避免呼叫端被 pending 的 play() promise 永遠掛住。
      */
-    function beginReveal(id, token) {
+    function beginReveal() {
       let settled = false;
       let resolveFn = () => {};
       const promise = new Promise((r) => { resolveFn = r; });
-      const done = () => {
+      const done = (ok) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        resolveFn();
+        resolveFn(!!ok);
       };
-      const timer = setTimeout(() => {
-        if (!destroyed && token === playToken && !hasVisibleVideo()) primeStill(id);
-        done();
-      }, STILL_FALLBACK_MS);
+      const timer = setTimeout(() => done(false), REVEAL_GIVEUP_MS);
       return { promise, done };
     }
 
+    /** @returns {Promise<boolean>} 影片是否真的出現在畫面上 */
     function play(id, playKind = "wait") {
-      if (destroyed || !id) return Promise.resolve();
+      if (destroyed || !id) return Promise.resolve(false);
       const token = ++playToken;
       currentId = id;
       setBadge(playKind === "confirm" ? "鎖定中…" : "");
       root.classList.toggle("vp-confirm", playKind === "confirm");
       setState("loading");
-      const reveal = beginReveal(id, token);
-      runPlay(id, playKind, token, reveal).catch(() => reveal.done());
+      const reveal = beginReveal();
+      runPlay(id, playKind, token, reveal).catch(() => reveal.done(false));
       return reveal.promise;
     }
 
     async function runPlay(id, playKind, token, reveal) {
       await loadManifest();
-      if (destroyed || token !== playToken) return reveal.done();
+      if (destroyed || token !== playToken) return reveal.done(false);
 
       const url = videoUrl(id, playKind);
       if (!url) {
+        // 整支缺檔才走靜圖（正常情況 14 角都有片，這條是防呆）
         showStill(id);
         setBadge("");
-        return reveal.done();
+        return reveal.done(true);
       }
 
       const src = versioned(url);
       const target = video.dataset.src === src ? video : standby;
       if (!target) {
         showStill(id);
-        return reveal.done();
+        return reveal.done(true);
       }
       if (target.dataset.src !== src) {
         setSource(target, src, { loop: playKind === "wait", preload: "auto" });
         await waitEvent(target, "canplay", 1400);
-        if (destroyed || token !== playToken) return reveal.done();
+        if (destroyed || token !== playToken) return reveal.done(false);
       }
       target.loop = playKind === "wait";
 
@@ -307,7 +309,7 @@ window.HF_VideoPlayer = (() => {
         shown = true;
         activateVideo(target, token);
         setState("playing");
-        reveal.done();
+        reveal.done(true);
         if (playKind === "wait") primeMedia(id, "confirm");
       };
       target.addEventListener("playing", showVideo, { once: true });
@@ -315,15 +317,13 @@ window.HF_VideoPlayer = (() => {
       try {
         const p = target.play();
         if (p && typeof p.then === "function") await p;
-        if (destroyed || token !== playToken) return reveal.done();
+        if (destroyed || token !== playToken) return reveal.done(false);
         showVideo();
       } catch (_) {
+        // 播不動就安靜放棄，舞台維持空的召喚陣 —— 不拿角色圖去頂
         target.removeEventListener("playing", showVideo);
-        if (token === playToken) {
-          showStill(id);
-          setBadge("");
-        }
-        reveal.done();
+        if (token === playToken) setBadge("");
+        reveal.done(false);
       }
     }
 
@@ -413,15 +413,8 @@ window.HF_VideoPlayer = (() => {
         }
         if (destroyed || token !== playToken || settled) return finish();
         // 載不動就直接收尾，不要呆等硬上限（手機網路差時會像卡住）。
-        // 但畫面上若連待命片都沒有，先用立繪頂一拍再收，至少讓玩家看到自己選的角色。
-        if (target.error || target.readyState < 2) {
-          if (hasVisibleVideo()) return finish();
-          showStill(id);
-          const left = maxTotalMs - (performance.now() - startedAt);
-          if (timer) clearTimeout(timer);
-          timer = setTimeout(finish, Math.max(0, Math.min(900, left)));
-          return;
-        }
+        // 不拿角色圖去頂一拍：睿哥要求進動畫前不要出現大頭圖案。
+        if (target.error || target.readyState < 2) return finish();
 
         try {
           target.currentTime = 0;

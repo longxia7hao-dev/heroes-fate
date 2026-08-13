@@ -1603,9 +1603,9 @@ body::after {
   transition: none;
 }
 /**
- * 頂替用的靜圖只能站在兩隻石龍中間的召喚陣上，不可以蓋掉石雕。
- * 直式影片以 contain 落在中央那一條（14 支裡有 13 支是 720×1270），
- * 靜圖就用同一個 720/1270 的框 + cover，footprint 與影片完全一致。
+ * 選角舞台在待命動畫開演前不顯示任何角色圖（睿哥指定）：維持空的召喚陣。
+ * 這條保險是為了「影片整支缺檔」那種例外情況 —— 真的走到靜圖時，
+ * 它也只能站在兩隻石龍中間那一條，跟直式影片同一個框，不可以蓋掉石雕。
  */
 #screen-pick .vp-still {
   left: 50%;
@@ -1960,12 +1960,11 @@ body::after {
   object-position: center;
 }
 /**
- * 切入的頂替圖：用選角卡那張已在快取裡的頭像（13KB，0 位元組就能顯示），
- * 以 cover 裁切不會變形 —— 當年停用它是因為方形立繪比例不同會變形，cover 沒這問題。
- * 影片元素在真的開播（.is-playing）之前保持透明，這樣就不會看到
- * 上一位角色殘留的 poster、或只解碼一半的首幀壓在黑底上。
+ * 切入層在動畫真的開演（.is-playing）之前什麼角色圖都不顯示（睿哥指定）：
+ * 只有 .hero-cut 自己的深色底 + 名牌，不頂立繪、不頂頭像、也不讓 video 的
+ * poster 露出來 —— 那會變成「上一位角色殘留的畫面」或「只解碼一半的首幀」。
  */
-.hero-cut-poster { display: block; }
+.hero-cut-poster { display: none !important; }
 .hero-cut-video { opacity: 0; background: transparent; transition: opacity 140ms ease; }
 .hero-cut.is-playing .hero-cut-video { opacity: 1; background: #090315; }
 .hero-cut-shade {
