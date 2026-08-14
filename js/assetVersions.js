@@ -143,7 +143,7 @@ window.HF_ASSET_V = {
 "assets/heroes/portraits/paladin.jpg":"3400cbdc6f",
 "assets/heroes/portraits/princess.jpg":"a440ebe206",
 "assets/heroes/portraits/ranger.jpg":"f10aef4e72",
-"assets/audio/bgm/battle.mp3":"1ebebfd65d",
+"assets/audio/bgm/battle.mp3":"712fbb782a",
 "assets/audio/bgm/home_custom.mp3":"10fb7ea41e",
 "assets/audio/bgm/pick.mp3":"781926ba6e",
 "assets/audio/heroes/attack/amazon.mp3":"f6c3cd1c52",
