@@ -9,7 +9,8 @@
 - **收工要 `git push`**，不然手機看不到你的改動。改完 → commit → push → 等約 1 分鐘 Pages 重建 → 手機下拉重載。
 - **repo 是程式碼的事實來源。** 雲端 session 動工前先 `git pull`；本機動工前也先 `git pull`，避免兩邊各改一份。
 - **版本控制只收遊戲實際在用的素材**（約 73MB）。舊高碼率原片與已停用的 `assets/anim` 由 `.gitignore` 排除，只留在本機與 Google Drive。**別把它們加回來。**
-- **雲端 session 做不到的事**：ffmpeg 轉檔、讀 Google Drive 素材夾（`tools/*.py` 需要）。那些要在本機做。純 JS／CSS／HTML 的修改在雲端完全沒問題。
+- **雲端 session 做不到的事**：讀 Google Drive 素材夾（`tools/*.py` 需要）—— 那個要在本機做。純 JS／CSS／HTML 的修改在雲端完全沒問題。
+- **ffmpeg 在雲端可以用**（這條 2026-08-15 更正，舊版寫「做不到」是錯的）：`pip install imageio-ffmpeg` 會帶一份**靜態 ffmpeg 7.0.2**，H.264／AAC 都能解能編。已用它做過：抽影片音軌做音效（v1.22／v1.32）、把 18MB 的原片壓成行動版（v1.36）。
 
 ## 動工前的閱讀順序
 

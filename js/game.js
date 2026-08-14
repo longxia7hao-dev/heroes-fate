@@ -1553,13 +1553,14 @@
     boss.classList.remove("show");
     placeHeroes([]);
 
-    // ── 開場影片。用魔王降臨那支：目前唯一的全螢幕開場片，
-    //    也是「命運儀式開場」的排面。沒播成就直接進牌陣，流程不能卡。
+    // ── 開場影片（睿哥的素材，6.04s）。沒播成就直接進牌陣，流程不能卡。
+    //    原片 1152×1728／24Mb/s／18MB，已壓成 720×1080 CRF 30（1.09MB）；
+    //    音軌拿掉了 —— 舞台影片一律靜音播放（iOS 自動播放的硬性條件），留著只是負重。
     setAct("arrival");
     stage.classList.add("dark");
     setBanner("命運排序 · 儀式開始");
-    await playStageClip(video, "assets/videos/mobile/boss/arrival.mp4", 9000 * fast, {
-      poster: artUrl("assets/videos/poster/boss/arrival.jpg"),
+    await playStageClip(video, "assets/videos/mobile/order/intro.mp4", 9000 * fast, {
+      poster: artUrl("assets/videos/poster/order/intro.jpg"),
       readyMs: 8000,
       untilEnded: true,
       onPlay: () => audioCue("boss.enter", { group: "presentation" }),
