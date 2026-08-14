@@ -52,6 +52,10 @@ cd /Users/longxia7hao/Heroes_Fate && python3 -m http.server 8888 --bind 0.0.0.0
    於是上面所有 `?v=` 的努力全部白費。2026-08-13～14 為此誤判過三次。
 
    現在有兩道防線，**改版時兩件事都要做**：
+   **還有一層是 CSS 自己的 `url()`**：`css/ornate.css` 的框與按鈕素材（`assets/ui/*.webp`）
+   走的是 CSS，**吃不到 `HF_ASSET_V` 那張逐檔雜湊表**（那是 JS 讀的）。換這幾張圖時要
+   **手動把 CSS 裡的 `?v=` +1**，只 +ornate.css 自己的版本沒有用。
+
    - 更新 `index.html` 的 `.build-stamp`（首頁最下面那行版本印記，**看得到才是新版**）
    - 跑 `python3 tools/sync_build.py` 把印記同步到 `build.txt` ——
      `game.js` 會以 `no-store` 抓它跟頁面比對，不一樣就跳「有新版本 · 點一下更新」。

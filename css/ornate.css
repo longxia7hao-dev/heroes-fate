@@ -60,43 +60,77 @@
 
 /* ── 面板 ─────────────────────────────────────────────────────────── */
 
+/**
+ * 面板的框**直接用稿子的像素**（`assets/ui/frame_panel.webp`，
+ * 由 `tools/cut_ui_frames.py` 從 STEP 01 那張稿子摳出來）。
+ *
+ * 為什麼從 CSS 近似改成貼圖：稿子那種框是手繪級的金屬立體感 ——
+ * 斜面、亮邊、四角的托架、上緣兩顆凸出框外的飾釘。CSS 只能做到
+ * 「一條金線 ＋ 一顆菱形」，睿哥看過之後說「跟這個還是有點差異，
+ * 能用圖片套疊的方式嗎？」，所以改成貼稿子本人。
+ *
+ * 為什麼是 border-image 而不是 background-image：九宮格**只拉伸四條邊，
+ * 四個角永遠維持原始比例**。面板高度隨內容變（人數頁矮、模式頁高）也不走樣。
+ *
+ * 三組數字的來歷（素材 582×701）：
+ *   slice  93 104 68 104        四角切片大小，單位是**素材像素**
+ *   width  62px 70px 46px 70px  實際畫出來多大。稿子是 2.4x 的手機畫面、
+ *                               素材又縮了 0.62，所以 素材px ÷ 1.488 ＝ CSS px
+ *   outset 11px                 素材四邊各留了 11px bleed 讓飾釘凸出去，
+ *                               往外推同樣的量，金線才剛好落在版面邊界上
+ *
+ * ⚠️ `border-image-width`（70px）遠大於 `border-width`（11px）是**刻意的**：
+ * 版面上只吃 11px，多出來的部分往內畫、疊在 padding 上，所以角落那組托架
+ * 不會把內容擠窄。padding 只要留得比金線本身厚就不會壓到字。
+ */
 #screen-home .home-panel,
 #screen-count .card.panel,
-#screen-mode .card.panel {
-  border: 2px solid var(--au-line);
-  border-radius: 18px;
+#screen-mode .card.panel,
+#screen-result .card.panel,
+#modal-settings .card.panel,
+#modal-stats .card.panel {
+  border-style: solid;
+  border-width: 11px;
+  border-color: transparent;
+  border-radius: 14px;
+  border-image-source: url("../assets/ui/frame_panel.webp?v=1");
+  border-image-slice: 93 104 68 104;
+  border-image-width: 62px 70px 46px 70px;
+  border-image-outset: 11px;
+  border-image-repeat: stretch;
   /* background-color 必須單獨給：下面的 background-image 會蓋掉簡寫設的底色，
      少了它面板是透明的，backdrop-filter 會把背後的光斑糊成一顆怪圓。 */
   background-color: #17092f;
+  background-image: linear-gradient(180deg, rgba(46, 20, 92, 0.94), rgba(16, 7, 36, 0.96));
   /* 面板已接近不透明，模糊只剩副作用 */
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  /**
-   * 底部兩顆飾釘用背景圖補。**上面兩顆不要碰** —— revamp.css 的
-   * `:is(.card, .panel)::before/::after` 就是它們（`content: "◆"` 的圓形徽記，
-   * 稿子裡也有）。把 ::after 拿去畫別的東西，右上那顆就會變成一坨深色方塊。
-   */
-  --medal: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22'><circle cx='11' cy='11' r='9.6' fill='%2321103d' stroke='%23ffdfa0' stroke-width='1'/><path d='M11 7.2 L14.8 11 L11 14.8 L7.2 11 Z' fill='%23e9c477'/></svg>");
-  background-image:
-    var(--medal), var(--medal),
-    linear-gradient(180deg, rgba(46, 20, 92, 0.94), rgba(16, 7, 36, 0.96));
-  background-repeat: no-repeat;
-  background-position: left 9px bottom 9px, right 9px bottom 9px, center;
-  background-size: 22px 22px, 22px 22px, cover;
-  /**
-   * 內框線用 outline + 負的 outline-offset。
-   * 這比 inset box-shadow 好：不會用不透明色蓋掉底下的漸層，
-   * 也不必動 ::before／::after（那兩個在這個專案裡都另有用途）。
-   */
-  outline: 1px solid rgba(233, 196, 119, 0.3);
-  outline-offset: -6px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 235, 190, 0.22),
-    0 0 0 1px rgba(0, 0, 0, 0.6),
-    0 0 30px var(--au-glow),
-    inset 0 0 40px rgba(74, 32, 128, 0.42);
-  /* 底部飾釘要有地方站，不然會被最下面那排按鈕壓住 */
-  padding-bottom: 1.5rem;
+  /* 外框已經是圖，box-shadow 只留背後的光暈，別再疊金線 */
+  box-shadow: 0 0 34px rgba(255, 199, 92, 0.18), 0 24px 56px rgba(0, 0, 0, 0.55);
+  outline: none;
+  /* 上緣要讓出飾釘的位置，下緣讓出托架 */
+  padding: 1.5rem 1.1rem 1.35rem;
+}
+
+/**
+ * revamp.css 的 `:is(.card, .panel)::before/::after` 是那兩顆 `content: "◆"`
+ * 的圓形徽記。新框的圖裡**已經帶了飾釘**，兩套疊在一起會變成四顆，
+ * 所以在有貼圖框的面板上把它們關掉。
+ * （只是關掉，不是拿去畫別的 —— 那兩個 pseudo 在別處還有用。）
+ */
+#screen-home .home-panel::before,
+#screen-home .home-panel::after,
+#screen-count .card.panel::before,
+#screen-count .card.panel::after,
+#screen-mode .card.panel::before,
+#screen-mode .card.panel::after,
+#screen-result .card.panel::before,
+#screen-result .card.panel::after,
+#modal-settings .card.panel::before,
+#modal-settings .card.panel::after,
+#modal-stats .card.panel::before,
+#modal-stats .card.panel::after {
+  content: none;
 }
 
 /* 背景那群 Q 版英雄是主角，別再壓那麼暗（稿子裡他們很清楚） */
@@ -131,51 +165,76 @@
 
 /* ── 按鈕 ─────────────────────────────────────────────────────────── */
 
-:is(#screen-home, #screen-count, #screen-pick, #screen-mode, #screen-result, #modal-settings) .btn.primary {
-  border: 1.5px solid #6a4712;
-  border-radius: 12px;
+/**
+ * 按鈕同樣改成貼稿子的像素（`btn_gold.webp`／`btn_purple.webp`）。
+ *
+ * 素材不是整顆按鈕，是重組過的窄長條：[左端] + [一小條沒有字的材質] + [左端鏡射]。
+ * 稿子上的按鈕本來印著「進入英雄殿堂」，整顆拿來當九宮格素材，中央那塊會
+ * 連字一起被拉伸。切成長條之後中央只剩乾淨材質，橫向拉伸不會出事，
+ * 直向仍照原比例對應，所以金屬由上到下的漸層完整保留。詳見 tools/cut_ui_frames.py。
+ *
+ * `fill` 一定要加，否則中央是空的，只會畫出一圈邊。
+ */
+:is(#screen-home, #screen-count, #screen-pick, #screen-mode, #screen-result, #modal-settings) :is(.btn.primary, .btn.gold) {
+  /**
+   * border-width 只留 2px 給版面（按鈕本來就矮，吃掉 8px 上下，
+   * 「開始冒險」跟底下那行 ENTER THE FATE 會擠在一起疊字）；
+   * 斜面靠 border-image-width 往內畫，字則用 padding 讓開。
+   */
+  border: 2px solid transparent;
+  border-radius: 0;
   color: #3a2103;
   text-shadow: 0 1px 0 rgba(255, 246, 220, 0.55);
-  background:
-    /* 裂紋：兩道極淡的斜線，讓金面不是一片死板的漸層 */
-    repeating-linear-gradient(114deg, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 26px),
-    repeating-linear-gradient(64deg, rgba(90, 55, 10, 0.07) 0 1px, transparent 1px 34px),
-    linear-gradient(180deg, #ffeec2 0%, var(--au) 30%, var(--au-mid) 58%, #e6c179 82%, #fff0c8 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 252, 236, 0.9),
-    inset 0 -2px 5px rgba(96, 58, 10, 0.42),
-    0 0 0 1px rgba(0, 0, 0, 0.45),
-    0 4px 14px rgba(0, 0, 0, 0.45),
-    0 0 26px rgba(255, 199, 92, 0.42);
+  background: none;
+  border-image-source: url("../assets/ui/btn_gold.webp?v=1");
+  border-image-slice: 27 fill;
+  border-image-width: 18px;
+  border-image-repeat: stretch;
+  padding: 0.5rem 1.15rem;
+  /* 切角是圖片的 alpha，box-shadow 只認方形的 border box —— 用它會在四個
+     切角外露出一塊方形暗影。陰影一律走 filter: drop-shadow（吃 alpha）。 */
+  box-shadow: none;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.5));
 }
-.btn.primary small,
+:is(.btn.primary, .btn.gold) small,
 .btn.primary .m-cta {
   color: #5b3708;
   text-shadow: none;
 }
-:is(#screen-home, #screen-count, #screen-pick, #screen-mode, #screen-result) .btn.primary:active {
-  box-shadow:
-    inset 0 2px 6px rgba(96, 58, 10, 0.5),
-    0 0 0 1px rgba(0, 0, 0, 0.45),
-    0 0 18px rgba(255, 199, 92, 0.3);
+/* 貼圖按鈕的斜面把可用高度吃掉一點，兩行字會黏在一起 */
+#screen-home .home-start {
+  min-height: 64px;
+  gap: 0.3rem;
+  line-height: 1.05;
+}
+#screen-home .home-start small {
+  opacity: 0.85;
+}
+#screen-home #btn-settings {
+  min-height: 54px;
+}
+/* 貼圖按鈕沒辦法用 inset box-shadow 表現按下去（圖蓋在上面），
+   改用整體壓暗 + 微縮，手感一樣在。 */
+:is(#screen-home, #screen-count, #screen-pick, #screen-mode, #screen-result) :is(.btn.primary, .btn.gold):active,
+:is(#screen-home, #screen-count, #screen-pick, #screen-mode, #screen-result) .btn.ghost:active {
+  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.5)) brightness(0.86);
+  transform: translateY(1px);
+  box-shadow: none;
 }
 
 :is(#screen-home, #screen-count, #screen-pick, #screen-mode, #screen-result, #modal-settings) .btn.ghost {
-  border: 1.5px solid rgba(169, 123, 255, 0.75);
-  border-radius: 12px;
+  border: 2px solid transparent;
+  border-radius: 0;
   color: #f0e6ff;
-  background: linear-gradient(180deg, #4d2694 0%, #34186b 52%, #24104c 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(214, 186, 255, 0.4),
-    inset 0 -2px 6px rgba(10, 3, 26, 0.55),
-    0 3px 12px rgba(0, 0, 0, 0.42),
-    0 0 20px rgba(139, 92, 246, 0.3);
+  background: none;
+  border-image-source: url("../assets/ui/btn_purple.webp?v=1");
+  border-image-slice: 27 fill;
+  border-image-width: 18px;
+  border-image-repeat: stretch;
+  padding: 0.5rem 1.15rem;
   text-shadow: 0 1px 2px rgba(8, 2, 20, 0.7);
-}
-:is(#screen-home, #screen-count, #screen-pick, #screen-mode, #screen-result) .btn.ghost:active {
-  box-shadow:
-    inset 0 2px 7px rgba(10, 3, 26, 0.6),
-    0 0 14px rgba(139, 92, 246, 0.22);
+  box-shadow: none;
+  filter: drop-shadow(0 3px 7px rgba(0, 0, 0, 0.45));
 }
 :is(#screen-home, #screen-count, #screen-pick, #screen-mode, #screen-result) .btn.ghost:disabled {
   opacity: 0.42;
