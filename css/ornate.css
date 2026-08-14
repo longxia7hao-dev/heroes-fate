@@ -928,36 +928,48 @@
   box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5), 0 0 12px rgba(255, 199, 92, 0.2);
 }
 
-/* 正面：英雄頭像 + 名次 */
+/**
+ * 正面：英雄頭像 + 名次。
+ *
+ * ⚠️ **不要用 `object-fit: cover`，名次也不要壓在圖上。**
+ * 頭像素材（240×322）本身就是很緊的「臉＋肩膀」構圖，肩膀就貼在下緣：
+ *   - `cover` 把 0.745 的圖塞進 0.667 的卡，左右各裁掉 5%，肩膀先斷一截；
+ *   - 名次條再用漸層蓋住下面三成，剩下的肩膀也沒了。
+ * 睿哥反映「臉跟肩膀都被切掉」就是這兩件事疊起來。
+ *
+ * 改成上下兩段的 flex：圖用 `contain` **完整顯示不裁切**，名次自己佔一條。
+ */
 .rk-front {
   transform: rotateY(180deg);
   border: 1.5px solid var(--rk-c, #ffe08a);
   background: #100820;
+  display: flex;
+  flex-direction: column;
 }
 .rk-front img {
+  flex: 1 1 auto;
+  /* flex 子項預設 min-height:auto，不歸零圖會把名次條擠出卡片外 */
+  min-height: 0;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
 .rk-no {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 0.1rem 0.12rem 0.14rem;
-  background: linear-gradient(180deg, rgba(6, 2, 16, 0), rgba(6, 2, 16, 0.92) 42%);
+  flex: 0 0 auto;
+  padding: 0.12rem 0.1rem 0.16rem;
+  background: linear-gradient(180deg, rgba(10, 4, 24, 0.9), rgba(6, 2, 16, 0.98));
+  border-top: 1px solid rgba(255, 223, 160, 0.28);
   color: #ffe9b6;
-  font-size: clamp(8px, 2.1vw, 11px);
+  font-size: clamp(7px, 1.9vw, 10px);
   font-weight: 900;
-  line-height: 1.1;
+  line-height: 1.12;
   text-align: center;
   text-shadow: 0 1px 2px #000;
 }
 .rk-no b {
   display: block;
   color: #fff6dc;
-  font-size: 1.15em;
+  font-size: 1.2em;
 }
 
 /* 翻開的瞬間給前三名一圈光 */
