@@ -1354,25 +1354,7 @@
       if (result.mode === "boss" || result.mode === "doom") {
         await presentBossRaid(players, result, { stage, bg, video, boss, smoke, spot, victory, cine, fast });
       } else if (mode === "order") {
-        setAct("order");
-        bg.style.backgroundImage = "url(assets/bg_party.jpg)";
-        boss.classList.remove("show");
-        placeHeroes(players);
-        setBanner("命運排序開始");
-        await wait(480 * fast);
-        const revealed = [];
-        for (let i = 0; i < result.order.length; i++) {
-          if (state.skip) break;
-          const p = result.order[i];
-          revealed.push(p);
-          placeHeroes(revealed);
-          const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`;
-          const h = p.hero || heroById(p.heroId);
-          setBanner(`${medal} ${playerLabel(p.slot)} · ${h.name}`);
-          impactFx(h.color || "#fff0bd");
-          audioCue("order.rank", { group: "presentation", rate: 1 + i * 0.025 });
-          await wait((i < 3 ? 560 : 280) * fast);
-        }
+        await presentOrderCards(result.order, { stage, bg, boss, video, fast });
         showResultOrder(result.order);
       } else if (mode === "pair") {
         setAct("pair");
@@ -1552,6 +1534,94 @@
    * 命運淘汰：每輪倒下一位，最後生還者勝出。
    * 淘汰順序在 seedRun 就已決定，這裡只負責演出。
    */
+  /**
+   * 命運排序的演出（睿哥 2026-08-15 指定，取代原本「一位一位站出來」的版本）：
+   *
+   *   1. 先播一段影片開場，跟魔王討伐同一個排面
+   *   2. 每位角色化成一張牌，**卡背朝上**排出來，一眼數得出有幾張
+   *   3. **同時翻面**，正面是英雄的樣貌；由左至右就是第一名到最後一名
+   *
+   * ⚠️ 名次不是這裡決定的 —— `result.order` 早在 `seedRun()` 就定案了
+   * （專案鐵則：先 RNG 定案，再播演出）。這裡只負責把既定的順序演出來，
+   * 所以牌陣直接照 `order` 的索引排，不做任何抽樣。
+   */
+  async function presentOrderCards(order, ctx) {
+    const { stage, bg, boss, video, fast } = ctx;
+    const wrap = $("#rank-cards");
+    setAct("order");
+    bg.style.backgroundImage = "url(assets/bg_party.jpg)";
+    boss.classList.remove("show");
+    placeHeroes([]);
+
+    // ── 開場影片。用魔王降臨那支：目前唯一的全螢幕開場片，
+    //    也是「命運儀式開場」的排面。沒播成就直接進牌陣，流程不能卡。
+    setAct("arrival");
+    stage.classList.add("dark");
+    setBanner("命運排序 · 儀式開始");
+    await playStageClip(video, "assets/videos/mobile/boss/arrival.mp4", 9000 * fast, {
+      poster: artUrl("assets/videos/poster/boss/arrival.jpg"),
+      readyMs: 8000,
+      untilEnded: true,
+      onPlay: () => audioCue("boss.enter", { group: "presentation" }),
+    });
+    stage.classList.remove("dark");
+    if (!wrap) return;
+
+    // 整段包在 try/finally 裡 —— 跳過或中途出錯時牌陣一定要收掉，
+    // 不然會一直卡在畫面上。
+    try {
+      // ── 發牌：全部卡背朝上
+      setAct("cards");
+      setBanner("命運之牌 · 由左至右決定順位");
+      // 一列最多七張還看得清楚；再多就折成兩列。寬度換算交給 CSS 的 calc，
+      // 因為它才知道容器實際多寬、gap 佔掉多少。
+      const perRow = Math.min(order.length, 7);
+      wrap.style.setProperty("--rk-n", String(perRow));
+      wrap.innerHTML = order
+        .map((p, i) => {
+          const h = p.hero || heroById(p.heroId);
+          return `<div class="rank-card${i < 3 ? " is-top" : ""}" style="--rk-i:${i};--rk-c:${h.color || "#ffe08a"}">
+            <div class="rk-inner">
+              <div class="rk-face rk-back"></div>
+              <div class="rk-face rk-front">
+                <img src="${heroThumb(h.id)}" alt="${h.name}" width="240" height="322"
+                     loading="eager" decoding="async" />
+                <span class="rk-no"><b>${i + 1}</b>${playerLabel(p.slot)}</span>
+              </div>
+            </div>
+          </div>`;
+        })
+        .join("");
+      wrap.setAttribute("aria-hidden", "false");
+
+      // 發牌音：每張一聲，跟 CSS 的 90ms 間隔對齊
+      for (let i = 0; i < order.length && !state.skip; i++) {
+        audioCue("order.rank", { group: "presentation", cooldown: 0, rate: 1 + i * 0.02 });
+        await wait(90 * fast);
+      }
+      await wait(700 * fast);
+
+      // ── 同時翻面
+      if (!state.skip) {
+        setBanner("翻牌！");
+        audioCue("fate.cardReveal", { group: "presentation" });
+        impactFx("#ffe08a");
+        wrap.querySelectorAll(".rank-card").forEach((el) => el.classList.add("is-flipped"));
+        // CSS 的翻面是 620ms，等它轉完再讓大家看清楚
+        await wait(760 * fast);
+        audioCue("reveal.winner", { group: "presentation" });
+        const top = order[0];
+        const th = top.hero || heroById(top.heroId);
+        setBanner(`第一名 · ${playerLabel(top.slot)} · ${th.name}`);
+        await wait(1500 * fast);
+      }
+    } finally {
+      wrap.setAttribute("aria-hidden", "true");
+      wrap.innerHTML = "";
+      wrap.style.removeProperty("--rk-n");
+    }
+  }
+
   async function presentSurvival(players, result, ctx) {
     const { stage, bg, boss, spot, victory, fast } = ctx;
     const survivor = result.survivor;

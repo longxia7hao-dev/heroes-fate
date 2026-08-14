@@ -826,3 +826,161 @@
     font-size: 1.32rem;
   }
 }
+
+/* ── 命運排序：牌陣（v1.35）──────────────────────────────────────── */
+
+/**
+ * ⚠️ 這一組類別**刻意叫 `rank-*`／`rk-*`，不要用 `fate-card`／`fc-*`** ——
+ * 那兩個名字在 revamp.css 裡**早就是命運卡揭曉那一層**（`.fate-card` 在 2415 行、
+ * `.fc-name`／`.fc-desc`／`.fc-kicker`，還有魔法陣的 `.fc-rune`）。
+ * 第一版我用了 `.fate-card`，卡片正面直接被那邊的樣式接管，量出來只有 20×23px
+ * ——卡背正常、正面卻縮成一顆小圓點，查了半天才發現是撞名。
+ *
+ * 睿哥要的演出：先播一段影片，然後每位角色化成一張牌，**卡背朝上**排在畫面中
+ *（一眼數得出有幾張），由左至右就是第一名到最後一名，**同時翻面**，
+ * 正面是英雄的樣貌。
+ *
+ * 翻牌用標準的 3D 兩面做法：外層 `transform-style: preserve-3d` 旋轉，
+ * 內層兩面各自 `backface-visibility: hidden`、背面預先轉 180°。
+ * **不要改成用 opacity 互換** —— 那看起來是「淡出淡入」不是「翻面」。
+ *
+ * 張數從 2 到 13 都要排得下，所以卡片寬度用 `--fc-w` 由 JS 依張數算好；
+ * 這裡只負責樣子。
+ */
+.rank-cards {
+  /**
+   * ⚠️ `--fc-w` 的**預設值一定要放在這裡**，不能放在 `.rank-card` 上。
+   * JS 是把算好的寬度設在這個容器上（`wrap.style.setProperty`），
+   * 而自訂屬性是靠繼承往下傳 —— 子元素只要自己也宣告一次，
+   * **自己的宣告就會蓋掉繼承來的值**，卡片會永遠停在預設寬度。
+   * （第一版就是這樣，算出 70px 卻永遠畫成 56px。）
+   */
+  --rk-gap: 0.4rem;
+  --rk-n: 5;
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  transform: translate(-50%, -50%);
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem var(--rk-gap);
+  justify-content: center;
+  align-items: flex-end;
+  width: min(94%, 720px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease;
+}
+.stage[data-act="cards"] .rank-cards {
+  opacity: 1;
+}
+/* 牌陣是這一幕的主角，背景那群英雄壓暗讓位 */
+.stage[data-act="cards"] .stage-bg {
+  filter: brightness(0.34) saturate(1.1);
+  transform: scale(1.06);
+}
+
+.rank-card {
+  position: relative;
+  /**
+   * 寬度**要把間距算進去**才不會多擠出一列 —— 第一版用 `92vw / 張數`
+   * 沒扣掉 gap，五張就從一列變兩列。`--rk-n` 是「一列放幾張」，由 JS 給。
+   */
+  width: min(calc((100% - (var(--rk-n) - 1) * var(--rk-gap)) / var(--rk-n)), 78px);
+  aspect-ratio: 3 / 4;
+  perspective: 620px;
+  /* 一張一張發出來：JS 給 --rk-i，延遲照序號 */
+  animation: fc-deal 300ms cubic-bezier(0.16, 0.84, 0.24, 1) both;
+  animation-delay: calc(var(--rk-i, 0) * 90ms);
+}
+@keyframes fc-deal {
+  from { opacity: 0; transform: translateY(26px) scale(0.86) rotate(-6deg); }
+  to { opacity: 1; transform: none; }
+}
+
+.rk-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 620ms cubic-bezier(0.3, 0.9, 0.25, 1);
+}
+.rank-card.is-flipped .rk-inner {
+  transform: rotateY(180deg);
+}
+
+.rk-face {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 9px;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5);
+}
+
+/* 卡背：金線 + 中央菱形，跟面板那套視覺語言同一家 */
+.rk-back {
+  border: 1.5px solid rgba(233, 196, 119, 0.8);
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255, 214, 130, 0.22), transparent 62%),
+    repeating-linear-gradient(45deg, rgba(255, 214, 130, 0.08) 0 2px, transparent 2px 7px),
+    linear-gradient(180deg, #3a1c6e 0%, #241046 55%, #150829 100%);
+  background-color: #241046;
+}
+.rk-back::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 46%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%) rotate(45deg);
+  border: 2px solid rgba(255, 231, 176, 0.95);
+  border-radius: 3px;
+  background: radial-gradient(circle, rgba(255, 214, 130, 0.35), transparent 70%);
+  box-shadow: 0 0 14px rgba(255, 199, 92, 0.6), inset 0 0 10px rgba(255, 199, 92, 0.35);
+}
+
+/* 正面：英雄頭像 + 名次 */
+.rk-front {
+  transform: rotateY(180deg);
+  border: 1.5px solid var(--rk-c, #ffe08a);
+  background: #100820;
+}
+.rk-front img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.rk-no {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0.1rem 0.12rem 0.14rem;
+  background: linear-gradient(180deg, rgba(6, 2, 16, 0), rgba(6, 2, 16, 0.92) 42%);
+  color: #ffe9b6;
+  font-size: clamp(8px, 2.1vw, 11px);
+  font-weight: 900;
+  line-height: 1.1;
+  text-align: center;
+  text-shadow: 0 1px 2px #000;
+}
+.rk-no b {
+  display: block;
+  color: #fff6dc;
+  font-size: 1.15em;
+}
+
+/* 翻開的瞬間給前三名一圈光 */
+.rank-card.is-flipped.is-top .rk-front {
+  box-shadow: 0 0 0 2px rgba(255, 223, 160, 0.5), 0 0 22px rgba(255, 199, 92, 0.6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rank-card { animation: none; }
+  .rk-inner { transition-duration: 1ms; }
+}
