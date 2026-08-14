@@ -700,3 +700,129 @@
     font-size: 0.8rem;
   }
 }
+
+/**
+ * 其他模式（分隊／排序）的結果頁也要一個螢幕裝得下。
+ *
+ * 單人勝利那版（v1.30）是把每一塊都收小；但分隊的名單長度會隨人數變
+ * （最多 13 人 4 隊），**再怎麼收都有裝不下的一天**，硬收只會讓少人數時醜。
+ *
+ * 所以改成**面板 flex 直排、只讓名單那塊伸縮**：其餘（徽章、立繪、名字、按鈕）
+ * 保持自然大小，名單吃掉剩下的空間，真的放不下才在名單自己裡面捲。
+ * 這樣「按鈕永遠看得到、不用滑整頁」對任何人數都成立。
+ *
+ * `min-height: 0` 不能省 —— flex 子項的 `min-height` 預設是 `auto`，
+ * 不歸零的話 `.result-detail` 根本不會縮，overflow 也就不會生效。
+ */
+#screen-result .result-panel {
+  display: flex;
+  flex-direction: column;
+}
+#screen-result .result-model,
+#screen-result .result-badge,
+#screen-result .result-panel h2,
+#screen-result .result-hero,
+#screen-result .doom-box,
+#screen-result .row.wrap {
+  flex: 0 0 auto;
+}
+#screen-result .result-detail {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/**
+ * 名單型的結果頁（分隊／排序／淘汰／配對）：主角是名單不是立繪，所以立繪讓位。
+ * 由 `setResultPortrait(id, { list: true })` 掛上 `.result-list`。
+ *
+ * 不用 CSS 的 `:has(.team-block)` 判斷，是因為排序模式的名單是一串 `<p>`／`<ol>`，
+ * 沒有共通的標記可以選；由產生內容的那一端直接說「我是名單」最不容易錯。
+ */
+#screen-result .result-panel.result-list .result-model.has-video {
+  height: min(17dvh, 132px);
+}
+#screen-result .result-panel.result-list .result-model:not(.has-video) {
+  width: min(26dvh, 120px);
+}
+#screen-result .result-panel.result-list h2 {
+  margin-top: 0.2rem;
+  font-size: 1.5rem;
+}
+#screen-result .result-panel.result-list .result-hero {
+  font-size: 0.85rem;
+}
+#screen-result .result-panel.result-list .result-detail {
+  padding: 0.4rem 0.5rem;
+}
+
+/* 名單模式下把每一塊再收緊：3 隊 3 人本來要 215px，收完約 175px，
+   常見人數（3–6 人）就完全不必捲；13 人那種仍會捲，那是本來就裝不下。 */
+#screen-result .result-panel.result-list .team-block {
+  margin: 0.28rem 0;
+  padding: 0.34rem 0.5rem;
+  border-radius: 10px;
+}
+#screen-result .result-panel.result-list .team-name {
+  margin-bottom: 0.1rem;
+  font-size: 0.86rem;
+}
+#screen-result .result-panel.result-list .team-list {
+  padding-left: 0.95rem;
+  font-size: 0.85rem;
+}
+#screen-result .result-panel.result-list .team-list li {
+  margin: 0.06rem 0;
+}
+#screen-result .result-panel.result-list .rank-list li {
+  margin: 0.05rem 0;
+}
+
+/**
+ * 模式頁：刪掉三個模式之後 393×660 已經一頁裝得下，但 360×600 還差約 90px。
+ * 卡片本身就是主角，收的是內距與敘述的字級，不動標題與圖。
+ */
+@media (max-height: 700px) {
+  #screen-mode .mode-cards {
+    gap: 0.45rem;
+  }
+  #screen-mode .mode-card,
+  #screen-mode .mode-card-teams {
+    padding-block: 0.5rem;
+  }
+  #screen-mode .mode-card .m-desc {
+    font-size: 0.78rem;
+    line-height: 1.32;
+  }
+  #screen-mode .mode-card .m-ico {
+    transform: scale(0.86);
+  }
+  #screen-mode .card.panel .desc {
+    margin-bottom: 0.3rem;
+    font-size: 0.8rem;
+  }
+  #screen-mode .card.panel {
+    padding-block: 1rem 0.9rem;
+  }
+  #screen-mode .row {
+    margin-top: 0.35rem;
+  }
+}
+
+/* 320 寬的老機再收一次（那個高度只有 560） */
+@media (max-height: 600px) {
+  #screen-mode .mode-cards {
+    gap: 0.34rem;
+  }
+  #screen-mode .mode-card,
+  #screen-mode .mode-card-teams {
+    padding-block: 0.36rem;
+  }
+  #screen-mode .mode-card .m-desc {
+    font-size: 0.72rem;
+  }
+  #screen-mode .card.panel h2 {
+    font-size: 1.32rem;
+  }
+}

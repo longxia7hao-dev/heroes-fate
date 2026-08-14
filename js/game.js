@@ -1814,10 +1814,17 @@
   }
 
   /** 結果頁頭像：優先播該角色的勝利動畫，載不動才用立繪 */
-  async function setResultPortrait(heroId) {
+  /**
+   * @param {string} heroId
+   * @param {{list?: boolean}} [opts] `list: true` 代表這一頁的主角是**名單**
+   *   （分隊／排序／淘汰／配對），不是單一勝利者。名單的長度隨人數變，
+   *   立繪就得讓位 —— 見 css/ornate.css 的 `.result-panel.result-list`。
+   */
+  async function setResultPortrait(heroId, opts = {}) {
     const model = $("#result-model");
     const img = $("#result-img");
     const video = $("#result-video");
+    $("#screen-result .result-panel")?.classList.toggle("result-list", !!opts.list);
     if (img) img.src = heroImg(heroId);
     model?.classList.remove("has-video");
     if (!video || !window.HF_VideoPlayer) return;
@@ -1930,7 +1937,7 @@
     $("#result-badge").textContent = "🛡️ 最後生還者";
     $("#result-name").textContent = playerLabel(s.slot ?? 0);
     $("#result-hero").textContent = `${sh.name} · ${sh.weapon}`;
-    setResultPortrait(sh.id);
+    setResultPortrait(sh.id, { list: true });
     const outOrder = result.eliminated
       .map((p, i) => {
         const h = p.hero || heroById(p.heroId);
@@ -1951,7 +1958,8 @@
     $("#result-hero").textContent = `${teams.length} 隊`;
     const first = teams[0]?.[0];
     setResultPortrait(
-      first ? (first.hero || heroById(first.heroId)).id : "knight"
+      first ? (first.hero || heroById(first.heroId)).id : "knight",
+      { list: true }
     );
     $("#result-detail").innerHTML = teams
       .map((team, t) => {
@@ -2178,7 +2186,7 @@
     $("#result-badge").textContent = "📋 命運順位";
     $("#result-name").textContent = "排序完成";
     $("#result-hero").textContent = `共 ${order.length} 位`;
-    setResultPortrait((order[0].hero || heroById(order[0].heroId)).id);
+    setResultPortrait((order[0].hero || heroById(order[0].heroId)).id, { list: true });
     $("#result-detail").innerHTML =
       `<ol class="rank-list">` +
       order
@@ -2206,7 +2214,7 @@
     const first = pairs[0]?.[0];
     setResultPortrait(first
       ? (first.hero || heroById(first.heroId)).id
-      : "knight");
+      : "knight", { list: true });
     let html = `<ul class="pair-list">`;
     pairs.forEach(([a, b]) => {
       const ha = a.hero || heroById(a.heroId);

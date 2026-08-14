@@ -23,7 +23,7 @@
   <link rel="stylesheet" href="css/revamp.css?v=28" />
   <!-- 介面提升層：疊在最後，專門處理 2026-08-14 視覺稿的金框／金屬按鈕語言。
        要退版把這一行拿掉即可，不影響 revamp.css。 -->
-  <link rel="stylesheet" href="css/ornate.css?v=6" />
+  <link rel="stylesheet" href="css/ornate.css?v=7" />
   <!-- 魔王立繪：魔王討伐已完全不用它，只剩命運淘汰會用到，所以降為低優先，不跟影片搶頻寬 -->
   <link rel="preload" as="image" href="assets/boss_model_v3.webp" type="image/webp" fetchpriority="low" />
 </head>
@@ -67,7 +67,7 @@
           而且開著不重整就永遠不會重抓），所有 ?v= 都不會生效 ——
           那時這行會停在舊版本號，或整行不存在。**改版時記得改這裡。**
         -->
-        <p class="build-stamp" id="build-stamp">v1.33 · 0815-0109</p>
+        <p class="build-stamp" id="build-stamp">v1.34 · 0815-0201</p>
         <!-- 偵測到線上有新版時才出現；點一下重新載入 -->
         <button class="build-update" id="build-update" type="button" hidden>有新版本 · 點一下更新</button>
       </div>
@@ -137,6 +137,15 @@
         <p class="step-kicker">STEP 03 · RITUAL</p>
         <h2>選擇命運儀式</h2>
         <p class="desc">結果早已由公平 RNG 定案，接下來只差揭曉</p>
+        <!--
+          2026-08-15 睿哥：命運配對／命運審判／命運淘汰「與其他類別類似，沒必要存在」，卡片已移除。
+
+          ⚠️ **但 doom（命運審判）的程式碼不能刪** —— `js/rng.js` 的命運卡「逆命」
+          會把 boss 換成 doom（`if (mode === "boss") effectiveMode = "doom"`），
+          所以魔王討伐開到那張卡時仍然會走審判流程。要連那張卡一起拿掉得先問睿哥
+          （專案鐵則：改 rng.js 前先問）。pair／survival 的分支則是留著沒人走，
+          teams 模式仍沿用 pair 的 ACT 舞台，那段不要順手清掉。
+        -->
         <div class="mode-cards">
           <button class="mode-card" data-mode="boss">
             <span class="m-ico" aria-hidden="true">RAID</span>
@@ -151,27 +160,6 @@
             <span class="m-title">命運排序</span>
             <span class="m-desc">依序揭曉每位英雄的命運順位</span>
             <span class="m-cta">開始排序 →</span>
-          </button>
-          <button class="mode-card" data-mode="pair">
-            <span class="m-ico" aria-hidden="true">PAIR</span>
-            <span class="m-kicker">自動分組</span>
-            <span class="m-title">命運配對</span>
-            <span class="m-desc">洗牌後兩兩連結，奇數自動輪空</span>
-            <span class="m-cta">開始配對 →</span>
-          </button>
-          <button class="mode-card" data-mode="doom">
-            <span class="m-ico" aria-hidden="true">DOOM</span>
-            <span class="m-kicker">抽最倒楣的</span>
-            <span class="m-title">命運審判</span>
-            <span class="m-desc">同樣的演出，但這次選中的是要受罰的人</span>
-            <span class="m-cta">降下審判 →</span>
-          </button>
-          <button class="mode-card" data-mode="survival">
-            <span class="m-ico" aria-hidden="true">LAST</span>
-            <span class="m-kicker">留到最後</span>
-            <span class="m-title">命運淘汰</span>
-            <span class="m-desc">每輪倒下一位，最後生還者勝出</span>
-            <span class="m-cta">開始淘汰 →</span>
           </button>
           <div class="mode-card mode-card-teams" data-mode-group="teams">
             <span class="m-ico" aria-hidden="true">TEAM</span>
@@ -359,6 +347,6 @@
   <script src="js/videoPlayer.js?v=28"></script>
   <script src="js/audioDirector.js?v=18"></script>
   <script src="js/victoryFilm.js?v=12"></script>
-  <script src="js/game.js?v=65"></script>
+  <script src="js/game.js?v=66"></script>
 </body>
 </html>
