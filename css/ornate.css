@@ -438,3 +438,65 @@
 #screen-count .count-orbit {
   margin-block: 0.15rem;
 }
+
+/* ── 勝利者立繪框（v1.28）────────────────────────────────────────── */
+
+/**
+ * 睿哥拿現況跟目標稿並排，指的是**這個框**：現況是一個「正方形的盾牌框」，
+ * 勝利短片（400×704，比例 0.568）用 `object-fit: contain` 塞進去，
+ * 左右各留掉快三成的空白，角色因此小小一張浮在中間；目標稿是一張直式卡，
+ * 畫面**填滿整個框**、外圈一道金色的光。
+ *
+ * 根因是 revamp.css 的 `aspect-ratio: 1 / 1` ＋ `object-fit: contain`
+ * ＋ `padding: 4% 4% 9%`（那個下緣留白是為了避開盾形的圓弧）。
+ *
+ * 修法不是硬改成 cover —— 那會把角色的頭或腳裁掉。**讓框去配合素材**：
+ *   - 有勝利短片時（`.has-video`）：框就用 **400 / 704**，跟影片完全一致，
+ *     `cover` 於是零裁切也零留白。改用高度定尺寸，不然 210px 寬會變成 370px 高，
+ *     下面的名字與按鈕會被擠出畫面。
+ *   - 沒有短片、退回立繪時：立繪是 **512×512 的正方形**，框維持 1 / 1，同樣剛好。
+ */
+#screen-result .result-model {
+  aspect-ratio: 1 / 1;
+  /* 盾形圓弧拿掉，改成目標稿那種直式卡 */
+  border-radius: 18px;
+  /* 目標稿的邊是「亮金細邊 → 一圈暗底 → 再一圈金 → 外擴的暖光」 */
+  border: 2.5px solid #ffe9b6;
+  box-shadow:
+    0 0 0 4px rgba(38, 14, 68, 0.92),
+    0 0 0 6px rgba(255, 208, 116, 0.85),
+    0 0 18px rgba(255, 200, 96, 0.7),
+    0 0 48px rgba(255, 178, 58, 0.45),
+    0 20px 34px rgba(0, 0, 0, 0.5);
+}
+
+#screen-result .result-model.has-video {
+  aspect-ratio: 400 / 704;
+  width: auto;
+  height: min(46vh, 330px);
+}
+
+#screen-result .result-model :is(img, video) {
+  /* 框已經跟素材同比例，這裡就不需要留白，也不必再閃避圓弧 */
+  padding: 0;
+  object-fit: cover;
+}
+
+/* 名字放大到跟目標稿一樣有份量，副標往上收 */
+#screen-result .result-panel h2 {
+  margin-top: 0.5rem;
+  font-size: 2.1rem;
+}
+#screen-result .result-hero {
+  margin-top: 0.1rem;
+  font-size: 1rem;
+}
+
+@media (max-height: 700px) {
+  #screen-result .result-model.has-video {
+    height: min(42vh, 260px);
+  }
+  #screen-result .result-panel h2 {
+    font-size: 1.7rem;
+  }
+}
