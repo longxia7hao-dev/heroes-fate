@@ -532,12 +532,21 @@ window.HF_Audio = (() => {
     }, Math.max(200, duration));
   }
 
-  function playHeroAttack(heroId) {
+  /**
+   * 角色的攻擊音效。
+   *
+   * `options.volume` 是**倍率不是絕對值**（1 ＝ 原本的 0.84）。
+   * 最後一擊那段會傳 1.45 進來 —— 那是整場的高潮，跟輪播的攻擊切入用同一顆聲音
+   * 會顯得太平。搭配 `options.duck` 把討伐曲壓低，音效才出得來。
+   */
+  function playHeroAttack(heroId, options = {}) {
     stopGroup("hero-attack");
+    const boost = clamp(options.volume, 0.2, 1.6, 1);
+    if (options.duck) duck(options.duck, options.duckMs || 2400);
     const specific = asset(`assets/audio/heroes/attack/${heroId}.mp3`);
     const fallback = sfx[`attack_${heroAttackKind[heroId] || "sword"}`];
-    return playUrl(specific, { group: "hero-attack", volume: 0.84 }).then((source) => {
-      if (!source && fallback) return playUrl(fallback, { group: "hero-attack", volume: 0.74 });
+    return playUrl(specific, { group: "hero-attack", volume: 0.84 * boost }).then((source) => {
+      if (!source && fallback) return playUrl(fallback, { group: "hero-attack", volume: 0.74 * boost });
       return source;
     });
   }

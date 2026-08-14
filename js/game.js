@@ -1076,7 +1076,18 @@
       } catch (_) {}
       try { video.play()?.catch?.(() => {}); } catch (_) {}
       root.classList.add("is-playing");
-      audioCue("hero.attack." + hero.id, { group: "hero", fallback: "hero.attack.generic" });
+      /**
+       * ⚠️ 這裡本來是 `audioCue("hero.attack." + hero.id, …)`，但 **cueMap 裡
+       * 根本沒有 `hero.attack.<id>` 這種名字**（per-hero 的攻擊聲是走
+       * `HF_Audio.playHeroAttack()`，不是 cue 表）。`cue()` 查不到就直接
+       * return null，所以整段最後一擊**一顆音效都沒放**，只剩討伐曲在跑 ——
+       * 睿哥聽起來就是「最後一擊的音效太小聲」。
+       *
+       * 改成跟攻擊輪播同一條路徑，並且**放大 1.45 倍 + 把音樂壓到 0.42**：
+       * 這是整場的高潮，跟輪播用一模一樣的音量會沒有份量。
+       * final 片 1.3× 播完約 12s，duck 給 5.2s 涵蓋撞擊到餘韻。
+       */
+      window.HF_Audio?.playHeroAttack?.(hero.id, { volume: 1.45, duck: 0.42, duckMs: 5200 });
       // 最長的一支約 16s，1.3× 播完約 12.4s，上限給 14s
       await waitClipEnd(video, 14000);
       return true;
