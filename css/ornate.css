@@ -473,7 +473,7 @@
 #screen-result .result-model.has-video {
   aspect-ratio: 400 / 704;
   width: auto;
-  height: min(46vh, 330px);
+  height: min(46dvh, 330px);
 }
 
 #screen-result .result-model :is(img, video) {
@@ -494,9 +494,209 @@
 
 @media (max-height: 700px) {
   #screen-result .result-model.has-video {
-    height: min(42vh, 260px);
+    height: min(42dvh, 260px);
   }
   #screen-result .result-panel h2 {
     font-size: 1.7rem;
+  }
+}
+
+/* ── 結果頁塞進一個螢幕（v1.30）──────────────────────────────────── */
+
+/**
+ * 睿哥：「要讓整個畫面在手機畫面中，不要超出螢幕還要往下滑動。」
+ *
+ * 兩個各自獨立的原因：
+ *
+ * 1. **`vh` 在 iOS Safari 是「大視窗」** —— 它算的是網址列與工具列都收起來時的高度，
+ *    不是當下看得到的高度。手機上 `46vh` ≈ 392px（被 330px 上限接住），
+ *    但實際可見區只有約 660px，立繪框一個人就吃掉半個螢幕。
+ *    **這一層所有的 `vh` 一律改成 `dvh`**（動態視窗高度，才是真的看得到的那塊）。
+ *
+ * 2. **面板自己是捲動容器**：revamp.css 的 `#screen-result .result-panel` 有
+ *    `max-height: calc(100dvh - …)` ＋ `overflow-y: auto`，所以內容超出時不是
+ *    整頁變長，而是**在框裡面捲**——這也是為什麼只量 `document.scrollHeight`
+ *    會誤判成「沒有溢出」。實際量面板：393×660 超出 147px、360×600 超出 199px。
+ *
+ * 所以把各塊都收一點，最大的三塊是立繪框、命運卡說明框、三排按鈕。
+ * `overflow-y: auto` 保留當保險，但正常情況不該被用到。
+ */
+#screen-result .result-panel {
+  padding: 0.8rem 0.9rem 0.75rem;
+}
+
+#screen-result .result-model.has-video {
+  height: min(35dvh, 300px);
+}
+
+#screen-result .result-panel h2 {
+  margin-top: 0.3rem;
+  font-size: 1.95rem;
+}
+#screen-result .result-hero {
+  margin-top: 0.05rem;
+  font-size: 0.92rem;
+}
+
+/* 命運卡說明框：三行字不需要那麼寬鬆的內距 */
+#screen-result .result-detail {
+  margin-top: 0.42rem;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+#screen-result .result-detail > * {
+  margin-block: 0.18rem;
+}
+
+#screen-result .row.wrap {
+  gap: 0.34rem;
+  margin-top: 0.5rem;
+}
+#screen-result .row.wrap .btn {
+  min-height: 40px;
+  padding: 0.46rem 0.4rem;
+}
+#screen-result #btn-replay {
+  min-height: 46px;
+  font-size: 0.94rem;
+}
+
+/* 更矮的機子（可見高度 600 上下）再收一次 */
+@media (max-height: 700px) {
+  #screen-result .result-model.has-video {
+    height: min(31dvh, 240px);
+  }
+  #screen-result .result-panel h2 {
+    font-size: 1.6rem;
+  }
+  #screen-result .result-detail {
+    font-size: 0.78rem;
+    line-height: 1.42;
+  }
+  #screen-result .row.wrap .btn {
+    min-height: 36px;
+  }
+  #screen-result #btn-replay {
+    min-height: 42px;
+  }
+  /* 600 高的機子還差幾個 px，內距與列距再各收一點 */
+  #screen-result .result-panel {
+    padding: 0.6rem 0.85rem 0.6rem;
+  }
+  #screen-result .row.wrap {
+    gap: 0.3rem;
+    margin-top: 0.38rem;
+  }
+  #screen-result .result-panel:has(#doom-box:not([hidden])) .result-model.has-video {
+    height: min(21dvh, 165px);
+  }
+}
+
+/**
+ * 抽了懲罰任務之後會多出 `.doom-box`，那塊在 393 寬約 90px，
+ * 於是又把面板撐爆。用 `:has()` 偵測它有沒有顯示出來，**把空間從立繪框拿回來**
+ * ——那是唯一可以縮又不影響資訊的區塊。
+ *
+ * `:has()` 是 iOS Safari 16.4 起支援；萬一更舊的機器不支援，這幾條不生效、
+ * 退回原本「面板內可捲」的行為，不會壞掉。
+ */
+#screen-result .result-panel:has(#doom-box:not([hidden])) .result-model.has-video {
+  height: min(24dvh, 190px);
+}
+#screen-result .result-panel:has(#doom-box:not([hidden])) .result-model:not(.has-video) {
+  width: min(34dvh, 150px);
+}
+#screen-result .result-panel:has(#doom-box:not([hidden])) .result-detail {
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+#screen-result .result-panel:has(#doom-box:not([hidden])) h2 {
+  font-size: 1.55rem;
+}
+#screen-result .doom-box {
+  margin: 0.4rem 0 0.1rem;
+  padding: 0.45rem 0.7rem;
+}
+#screen-result .doom-kicker {
+  margin-bottom: 0.12rem;
+}
+#screen-result .doom-text {
+  font-size: clamp(0.92rem, 4.1vw, 1.1rem);
+  line-height: 1.28;
+}
+
+/**
+ * 320 寬的老機（SE 一代）在 `max-width: 350px` 會把結果頁的按鈕排成兩欄，
+ * 多出一整列。那個寬度本來就擠，這裡再把各塊收一次。
+ */
+@media (max-width: 350px) {
+  #screen-result .result-model.has-video {
+    height: min(26dvh, 200px);
+  }
+  #screen-result .result-panel h2 {
+    font-size: 1.45rem;
+  }
+  #screen-result .result-detail {
+    font-size: 0.74rem;
+  }
+  #screen-result .row.wrap .btn {
+    min-height: 34px;
+    font-size: 0.74rem;
+  }
+  #screen-result .result-panel:has(#doom-box:not([hidden])) .result-model.has-video {
+    height: min(16dvh, 125px);
+  }
+  /**
+   * 320 寬 ＋ 兩欄按鈕（多一整列）真的擠不下時，讓**說明框自己捲**，
+   * 而不是整個面板捲 —— 立繪與按鈕永遠留在畫面上，那才是「不用滑」的重點。
+   */
+  #screen-result .result-detail {
+    max-height: 20dvh;
+    overflow-y: auto;
+  }
+}
+
+/**
+ * ⚠️ 這一段必須放在**整個檔案最後**。
+ * 上面那條無條件的 `:has()` 規則跟這裡同強度，同強度時**誰在後面誰贏** ——
+ * 我第一次把它寫進前面的 `@media` 區塊，結果被後面的無條件規則蓋掉，量出來完全沒變。
+ */
+@media (max-height: 700px) {
+  #screen-result .result-panel:has(#doom-box:not([hidden])) .result-model.has-video {
+    height: min(21dvh, 165px);
+  }
+}
+
+@media (max-width: 350px) {
+  /**
+   * revamp.css 在這個寬度把結果頁的按鈕改成兩欄，於是多出一整列 ——
+   * 量出來那一列要 203px，比立繪框還貴。320 寬的機子高度也只有 560，
+   * 與其縮立繪不如**維持三欄**，字小一點就好（標籤最長只有四個字）。
+   */
+  #screen-result .row.wrap {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  #screen-result .row.wrap .btn:last-child {
+    grid-column: auto;
+  }
+  #screen-result #btn-replay {
+    grid-column: 1 / -1;
+  }
+  #screen-result .result-detail {
+    max-height: 13dvh;
+  }
+  #screen-result .result-panel:has(#doom-box:not([hidden])) .result-detail {
+    max-height: 11dvh;
+  }
+  #screen-result .result-panel:has(#doom-box:not([hidden])) .result-model.has-video {
+    height: min(12dvh, 95px);
+  }
+  #screen-result .result-panel:has(#doom-box:not([hidden])) h2 {
+    margin-top: 0.1rem;
+    font-size: 1.3rem;
+  }
+  #screen-result .result-panel:has(#doom-box:not([hidden])) .result-hero {
+    font-size: 0.8rem;
   }
 }
