@@ -343,3 +343,98 @@
   box-shadow: 0 0 18px rgba(255, 199, 92, 0.3);
 }
 .build-update[hidden] { display: none; }
+
+/* ── 版面（v1.27）─────────────────────────────────────────────────── */
+
+/**
+ * v1.26 只換了「框」，睿哥回「但一樣沒有改版面」—— 對，那一版是純皮膚。
+ * 這一段處理稿子與現況真正的**版面**差距，量出來最大的三項：
+ *
+ *   1. **標題小了一倍以上**。稿子裡「編成冒險隊伍」「選擇角色」的字高
+ *      約 80 個稿子像素 ＝ 33 CSS px ≈ 2rem，現況是 1.3rem。
+ *      標題是每一頁的視覺重心，小一號整頁就散掉。
+ *   2. **角色卡的名字沒有底條**。稿子是一條滿版深色帶壓在卡片下緣，
+ *      四個字的名字（武鬥宗師、光之精靈）完整讀得到；現況是直接疊在
+ *      卡片底色上、還會被 `text-overflow: ellipsis` 切掉。
+ *   3. **小按鈕被貼圖的斜面吃掉內距**。v1.26 給按鈕統一 `padding-inline: 1.15rem`，
+ *      但結果頁與選角頁那排小按鈕本來只有 0.35rem —— 斜面往內畫 18px，
+ *      字就頂在斜面上。這裡按情境各自給回合適的內距，並把小按鈕的斜面縮到 14px。
+ */
+
+/* 1. 標題放大到稿子的比例 */
+#screen-count .card.panel h2,
+#screen-mode .card.panel h2,
+#screen-pick .pick-header-text h2 {
+  font-size: 1.9rem;
+  line-height: 1.14;
+  letter-spacing: 0.04em;
+}
+#screen-count .card.panel h2,
+#screen-mode .card.panel h2 {
+  margin-bottom: 0.2rem;
+}
+
+/* 矮螢幕（360×640）標題照放會把舞台擠掉，退一號但仍比原本大 */
+@media (max-height: 700px) {
+  #screen-count .card.panel h2,
+  #screen-mode .card.panel h2,
+  #screen-pick .pick-header-text h2 {
+    font-size: 1.5rem;
+  }
+}
+
+/* 2. 角色卡名字改成滿版底條。負 margin 是為了抵銷卡片自己的
+      `padding: .14rem .1rem .2rem`，底條才會貼齊卡片邊緣。 */
+#screen-pick .hero-card .nm {
+  display: block;
+  margin: 0.16rem -0.1rem -0.2rem;
+  padding: 0.17rem 0.1rem;
+  border-top: 1px solid rgba(255, 235, 190, 0.09);
+  border-radius: 0 0 11px 11px;
+  background: rgba(4, 1, 12, 0.88);
+  /* 字級跟著視窗寬走：卡片是固定 7 欄，360 寬時每張只有 44.8px，
+     四個字的名字（武鬥宗師、暗影刺客）用固定字級就會頂到兩邊。 */
+  font-size: clamp(7.8px, 2.3vw, 9.4px);
+  letter-spacing: -0.03em;
+  /* 名字寧可略擠也要讀得到，不要切成「武鬥宗…」 */
+  text-overflow: clip;
+}
+
+/* 3. 小按鈕：斜面縮一點，內距給回來 */
+#screen-result .row.wrap .btn,
+#screen-pick .pick-actions .btn {
+  /* 斜面縮到 15px：14px 以下中央那塊被拉太開，金面會變得又淡又平 */
+  border-image-width: 15px;
+  padding: 0.58rem 0.5rem;
+  font-size: 0.78rem;
+}
+#screen-result #btn-replay {
+  border-image-width: 18px;
+  padding: 0.6rem 1rem;
+}
+
+/* 結果頁的命運卡說明框：跟著金色調，別再是一個灰框 */
+#screen-result .result-detail {
+  border-color: rgba(233, 196, 119, 0.28);
+  background: rgba(10, 4, 24, 0.62);
+  box-shadow: inset 0 1px 0 rgba(255, 235, 190, 0.1);
+}
+
+/**
+ * 稿子的人數頁**標題與副標是置中的**（STEP 標籤仍靠左），現況整頁靠左，
+ * 這是睿哥說「版面沒改」最直接的一項。模式頁一起置中，兩頁的頭部才一致。
+ */
+#screen-count .card.panel h2,
+#screen-count .card.panel .desc,
+#screen-mode .card.panel h2,
+#screen-mode .card.panel .desc {
+  text-align: center;
+}
+
+/* 標題放大後副標會貼到底下的魔法環裝飾上，補一點呼吸 */
+#screen-count .card.panel .desc {
+  margin-bottom: 0.55rem;
+}
+#screen-count .count-orbit {
+  margin-block: 0.15rem;
+}
