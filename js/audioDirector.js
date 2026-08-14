@@ -114,10 +114,12 @@ window.HF_Audio = (() => {
     "strike.release": ["fate_strike", 0.86, 1],
     /**
      * 符文亮起。一次蓄力會響四次、間隔約 690ms，所以這顆**必須夠短**
-     * （0.65s，尾端衰到 -34 dBFS）—— v1.21 就是兩記 2 秒的鐘疊在一起，
+     * （0.63s，尾端衰到 -40 dBFS）—— v1.21 就是兩記 2 秒的鐘疊在一起，
      * 圓陣都收乾淨了聲音還在鳴。
+     * 睿哥回報偏小聲，v1.33 把素材做了柔和飽和（RMS -15.4→-11.0 dBFS），
+     * 增益也從 0.9 提到 0.98（峰值×增益 0.79，與最響的 boss.roar 0.80 同級）。
      */
-    "strike.rune": ["rune_light", 0.9, 1],
+    "strike.rune": ["rune_light", 0.98, 1],
     "battle.gather": ["wheel_hit", 0.42, 0.82],
     "battle.clash": ["smoke_burst", 0.52, 1.06],
     "boss.enter": ["boss_stinger", 0.84, 1],
@@ -359,6 +361,13 @@ window.HF_Audio = (() => {
     if (!canPlayCue(name, options.cooldown ?? 70)) return null;
     const [key, gain, rate] = def;
     if (name === "victory.crown") duck(0.5, 3400);
+    /**
+     * 蓄力一開始就把討伐曲壓低，整段按住的過程都讓四記符文出得來。
+     * 光把音效調響不夠 —— 符文是寬頻的光暈聲，跟同樣寬頻的配樂疊在一起
+     * 會被蓋掉（遮蔽效應），要讓它「聽起來大聲」得先把背景讓開。
+     * 3.6s 涵蓋 3 秒的按住 ＋ 一擊落下。放開手會重按，這裡也會重新計時。
+     */
+    if (name === "strike.charge") duck(0.62, 3600);
     return playUrl(sfx[key], {
       group: options.group || "presentation",
       volume: gain * clamp(options.volume, 0, 1.5, 1),
@@ -607,6 +616,8 @@ window.HF_Audio = (() => {
       music: currentMusic,
       desiredMusic,
       engine: "webaudio-buffer",
+      // 目前音樂被壓低的倍率（1 ＝ 沒壓）。調音量平衡時看得到才好驗。
+      duckFactor,
       lastError,
       activeGroups: [...activeGroups.keys()],
     };

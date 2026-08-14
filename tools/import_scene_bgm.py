@@ -92,6 +92,11 @@ def main() -> None:
     ap.add_argument("--fade-out", type=float, default=0.0,
                     help="結尾淡出秒數。一次性音效（例如勝利號）用得到 —— "
                          "從樂句中間切斷會很突兀，循環用的曲子則不需要")
+    ap.add_argument("--drive", type=float, default=0.0,
+                    help="柔和飽和的驅動量（0＝關）。**用來提高密度而不是提高峰值** —— "
+                         "像光暈那種寬頻又鬆散的素材，峰值拉到頂了聽起來還是很小聲，"
+                         "因為 RMS 低。tanh 把波峰壓圓、把中間拉起來，RMS 才會上去。"
+                         "1.5–3 之間通常夠用，超過就開始有明顯的破音感")
     ap.add_argument("--attack", type=float, default=0.0,
                     help="開頭的快速上升秒數。**要當「一擊」用的音效才需要** —— "
                          "從樂句中間切進去會有喀聲，但淡入太長聽起來就不像撞擊，"
@@ -107,6 +112,12 @@ def main() -> None:
     audio = audio[a:b]
 
     before_db = dbfs(audio)
+    if args.drive > 0:
+        # 先把峰值頂到 1，飽和才吃得到；tanh 正規化過，輸出仍在 ±1 內
+        peak = np.max(np.abs(audio))
+        if peak > 0:
+            audio = audio / peak
+        audio = np.tanh(audio * args.drive) / np.tanh(args.drive)
     audio = seamless_loop(audio, sr, args.crossfade)
     if args.attack > 0:
         a_len = min(len(audio), int(args.attack * sr))
