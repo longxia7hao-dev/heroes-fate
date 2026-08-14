@@ -2521,6 +2521,46 @@
   setCount(4);
   fillPhoneHint();
   renderAudioStatus();
+  /**
+   * 新版偵測。手機上「改了卻看到舊的」在這個專案反覆發生：GitHub Pages 給
+   * HTML 的是 max-age=600，而且**分頁一直開著不重新整理，index.html 根本
+   * 不會再被抓一次**，於是所有 ?v= 都失效 —— 頁面自己不會知道有新版。
+   *
+   * 所以主動去問：抓 build.txt（no-store 繞過快取）跟頁面內嵌的印記比對，
+   * 不一樣就跳出提示讓玩家點一下更新。**不自動重載** —— 那會打斷正在進行
+   * 的一局。回到分頁時再查一次，那是最常「錯過新版」的時機。
+   *
+   * build.txt 由 `tools/sync_build.py` 從 index.html 的印記產生，改版後要跑。
+   */
+  (function watchForNewBuild() {
+    const stampEl = $("#build-stamp");
+    const button = $("#build-update");
+    if (!stampEl || !button) return;
+    const mine = stampEl.textContent.trim();
+    let notified = false;
+
+    async function check() {
+      if (notified || navigator.onLine === false) return;
+      try {
+        const res = await fetch(`build.txt?t=${Date.now()}`, { cache: "no-store" });
+        if (!res.ok) return;
+        const live = (await res.text()).trim();
+        if (!live || live === mine) return;
+        notified = true;
+        button.textContent = `有新版本 ${live} · 點一下更新`;
+        button.hidden = false;
+      } catch (_) {
+        // 離線或抓不到就安靜略過：這只是加分功能，不能因此壞掉
+      }
+    }
+
+    button.addEventListener("click", () => location.reload());
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) check();
+    });
+    setTimeout(check, 1500);
+  })();
+
   window.HF_VideoPlayer?.loadManifest?.().catch(() => {});
   setTimeout(() => show("home"), 800);
   } catch (err) {

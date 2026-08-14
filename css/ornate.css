@@ -268,3 +268,19 @@
 @media (prefers-reduced-motion: reduce) {
   .btn.primary, .btn.ghost { transition: none; }
 }
+
+/* 有新版可用時才顯示（見 game.js 的 watchForNewBuild） */
+.build-update {
+  display: block;
+  margin: 0.5rem auto 0;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid rgba(233, 196, 119, 0.7);
+  border-radius: 99px;
+  background: linear-gradient(180deg, #4d2694, #2a1252);
+  color: #ffeec2;
+  font: 700 0.72rem/1 inherit;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: 0 0 18px rgba(255, 199, 92, 0.3);
+}
+.build-update[hidden] { display: none; }

@@ -44,7 +44,18 @@ cd /Users/longxia7hao/Heroes_Fate && python3 -m http.server 8888 --bind 0.0.0.0
 1. **改了檔案但手機看到舊的** → 快取版本沒 +1。三層都要顧：
    - 改 JS／CSS → `index.html` 裡對應的 `?v=N` +1
    - 換影片 → `js/videoPlayer.js` 的 `MEDIA_VERSION` +1（改 manifest 則另加 `MANIFEST_VERSION`）
-   - 換立繪／頭像／poster → `js/game.js` 的 `ART_VERSION` +1
+   - 換素材（影片／圖／音檔）→ 跑 `python3 tools/gen_asset_versions.py`（逐檔雜湊表；`ART_VERSION`／`MEDIA_VERSION` 只是查不到時的退路）
+
+   **但最陰的一層是 `index.html` 自己**：頂端那三個 `<meta http-equiv="Cache-Control">`／`Pragma`／`Expires`
+   **對瀏覽器的 HTTP 快取完全沒有作用**（只有真的 HTTP header 算數），而 GitHub Pages 給 HTML 的是
+   `max-age=600`；更要命的是**分頁只要一直開著不重新整理，`index.html` 根本不會再被抓一次**，
+   於是上面所有 `?v=` 的努力全部白費。2026-08-13～14 為此誤判過三次。
+
+   現在有兩道防線，**改版時兩件事都要做**：
+   - 更新 `index.html` 的 `.build-stamp`（首頁最下面那行版本印記，**看得到才是新版**）
+   - 跑 `python3 tools/sync_build.py` 把印記同步到 `build.txt` ——
+     `game.js` 會以 `no-store` 抓它跟頁面比對，不一樣就跳「有新版本 · 點一下更新」。
+     **忘了跑，玩家就永遠收不到更新提示。**
 2. **換了影片就要重製 poster**（`assets/videos/poster/{attack,victory,final}/`、`poster/boss/arrival.jpg`）。切入層在影片載入前顯示的是 poster 首幀，忘了重製就會「先閃一張舊角色圖」。
 3. **演出流程有 early return，加新段落要看清楚位置**。`presentBossRaid()` 曾因為 `if (isDoom) { … return; }` 排在播 final 之前，導致命運審判模式整段最後一擊從來沒播過。加新 ACT 前先確認它在所有 return 之前。
 
