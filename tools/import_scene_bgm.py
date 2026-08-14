@@ -92,6 +92,10 @@ def main() -> None:
     ap.add_argument("--fade-out", type=float, default=0.0,
                     help="結尾淡出秒數。一次性音效（例如勝利號）用得到 —— "
                          "從樂句中間切斷會很突兀，循環用的曲子則不需要")
+    ap.add_argument("--attack", type=float, default=0.0,
+                    help="開頭的快速上升秒數。**要當「一擊」用的音效才需要** —— "
+                         "從樂句中間切進去會有喀聲，但淡入太長聽起來就不像撞擊，"
+                         "0.01–0.03 之間通常剛好")
     ap.add_argument("--bitrate", type=int, default=112)
     args = ap.parse_args()
 
@@ -104,6 +108,9 @@ def main() -> None:
 
     before_db = dbfs(audio)
     audio = seamless_loop(audio, sr, args.crossfade)
+    if args.attack > 0:
+        a_len = min(len(audio), int(args.attack * sr))
+        audio[:a_len] *= np.linspace(0.0, 1.0, a_len)[:, None]
     if args.fade_out > 0:
         f = min(len(audio), int(args.fade_out * sr))
         audio[-f:] *= np.linspace(1.0, 0.0, f)[:, None]

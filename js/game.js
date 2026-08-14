@@ -1232,6 +1232,16 @@
       let done = false;
       let waitTimer = 0;
 
+      /**
+       * 四個符文亮起的門檻。
+       * ⚠️ **必須跟 `css/revamp.css` 的 `.fc-rune[data-rune="n"]` 一致** ——
+       * 那邊是 `opacity: clamp(0, calc((var(--p) - 門檻) * 18), 1)`，
+       * 亮起的瞬間就是 `--p` 越過門檻的那一刻。改了一邊就要改另一邊，
+       * 不然聲音會跟畫面對不上。
+       */
+      const RUNE_AT = [0.22, 0.45, 0.68, 0.9];
+      let runesLit = 0;
+
       const finish = () => {
         if (done) return;
         done = true;
@@ -1252,6 +1262,13 @@
         const p = Math.min(1, (performance.now() - startedAt) / holdMs);
         // 魔法陣的亮度與四個符文全由這個值驅動（見 css/revamp.css 的 .fate-circle）
         gate.style.setProperty("--p", String(p));
+        // 符文逐一亮起，每亮一顆響一次（總共四次）。
+        // 用 while 不用 if：畫面卡頓時一個 frame 可能跨過兩個門檻，
+        // 那也要補放，不能讓某一顆默默沒有聲音。
+        while (runesLit < RUNE_AT.length && p >= RUNE_AT[runesLit]) {
+          runesLit += 1;
+          audioCue("strike.rune", { group: "presentation", cooldown: 0 });
+        }
         if (countEl) countEl.textContent = String(Math.max(1, Math.ceil((1 - p) * 3)));
         if (p >= 1) {
           haptic(24);
@@ -1278,8 +1295,10 @@
         held = false;
         cancelAnimationFrame(raf);
         gate.classList.remove("charging");
-        // 放開就整組回到暗版，下次按住重新開始
+        // 放開就整組回到暗版，下次按住重新開始 —— 符文的計數也要跟著歸零，
+        // 否則重按一次就再也不會響
         gate.style.setProperty("--p", "0");
+        runesLit = 0;
         if (subEl) subEl.textContent = "放開了……再按住一次";
         if (countEl) countEl.textContent = "3";
       };

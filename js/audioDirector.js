@@ -57,6 +57,8 @@ window.HF_Audio = (() => {
 
   const sfx = {
     fate_strike: asset("assets/audio/sfx/fate_strike.mp3"),
+    // 魔法陣四個符文逐一亮起時各響一次（睿哥的素材，從影片音軌抽出）
+    rune_light: asset("assets/audio/sfx/rune_light.mp3"),
     party_horn: asset("assets/audio/sfx/party_horn.mp3"),
     ui_click: asset("assets/audio/sfx/ui_click.mp3"),
     ui_lock: asset("assets/audio/sfx/ui_lock.mp3"),
@@ -110,6 +112,12 @@ window.HF_Audio = (() => {
     // 一擊落下用衝擊音，不用鐘 —— 0.6 秒後的 reveal.winner 才是鐘，
     // 兩顆都放鐘會疊成「魔法陣結束還在噹」
     "strike.release": ["fate_strike", 0.86, 1],
+    /**
+     * 符文亮起。一次蓄力會響四次、間隔約 690ms，所以這顆**必須夠短**
+     * （0.65s，尾端衰到 -34 dBFS）—— v1.21 就是兩記 2 秒的鐘疊在一起，
+     * 圓陣都收乾淨了聲音還在鳴。
+     */
+    "strike.rune": ["rune_light", 0.9, 1],
     "battle.gather": ["wheel_hit", 0.42, 0.82],
     "battle.clash": ["smoke_burst", 0.52, 1.06],
     "boss.enter": ["boss_stinger", 0.84, 1],
@@ -574,6 +582,7 @@ window.HF_Audio = (() => {
       sfx.ui_whoosh,
       sfx.wheel_hit,
       sfx.reveal_chime,
+      sfx.rune_light,
       sfx.boss_stinger,
       sfx.boss_roar,
       sfx.boss_defeat,

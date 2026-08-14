@@ -199,6 +199,7 @@ window.HF_ASSET_V = {
 "assets/audio/sfx/fate_strike.mp3":"7be8a868b6",
 "assets/audio/sfx/party_horn.mp3":"e341df7aba",
 "assets/audio/sfx/reveal_chime.mp3":"faf0a578a7",
+"assets/audio/sfx/rune_light.mp3":"1a94664871",
 "assets/audio/sfx/smoke_burst.mp3":"a1e6e0c7f3",
 "assets/audio/sfx/ui_click.mp3":"4155ed4255",
 "assets/audio/sfx/ui_lock.mp3":"a8e0ba0a01",
