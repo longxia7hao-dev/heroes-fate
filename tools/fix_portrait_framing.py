@@ -33,6 +33,7 @@ import math
 import shutil
 from pathlib import Path
 
+import numpy as np
 from PIL import Image, ImageFilter
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -51,8 +52,11 @@ ADJUST = {
     #（瞳距約 70）。這一輪改回接近原尺寸，只保留「往上移」那部分。
     "amazon": {"zoom": 1.22, "dy": 6},          # 瞳距約 44，全場最小
     "archmage": {"zoom": 1.02, "dy": 12},       # 瞳距約 70，全場最大：只上移不放大
-    "dark_fighter": {"zoom": 1.08, "dy": 4},    # 瞳距約 52，眼線 216 偏低
-    "dragon_knight": {"zoom": 1.16, "dy": -44}, # 瞳距約 50；眼線原本 150 太高
+    # 2026-08-15 第四輪：睿哥「武鬥宗師和龍騎士的顏色偏暗」。
+    # 量背景亮度（中位數 90.7）：dark_fighter 80.4（0.89×）、dragon_knight 76.5（0.84×）
+    # —— 這兩張正是全場最暗的兩張，是曝光差不是角色設定。
+    "dark_fighter": {"zoom": 1.08, "dy": 4, "gamma": 0.90, "sat": 1.10},
+    "dragon_knight": {"zoom": 1.16, "dy": -44, "gamma": 0.86, "sat": 1.05},
     "paladin": {"zoom": 1.24, "dy": 4},         # 瞳距原本 44，第一輪 1.30 稍過頭
 
     # 2026-08-15 第三輪：睿哥圈出這四張說「頭有比較小一點，可以稍微等比例放大」。
@@ -92,6 +96,26 @@ def extend(img: Image.Image, top: int, bottom: int) -> Image.Image:
     return out
 
 
+def tone(img: Image.Image, gamma: float, sat: float) -> Image.Image:
+    """統一曝光：gamma 提亮 ＋ 微調飽和。
+
+    **為什麼用 gamma 不用線性增益**：線性乘法會把本來就接近 255 的高光推爆
+    （天空、盔甲反光先死白），畫面反而變平。gamma < 1 抬的是中間調與暗部，
+    高光幾乎不動 —— 正是「整張偏暗」該用的修法。
+
+    gamma 由**背景**推算：`g = ln(目標/255) / ln(現值/255)`。
+    背景那片城堡天空 14 張是同一套美術，用它當基準才分得開
+    「這張曝光偏暗」與「這個角色本來就是暗色調」。
+    """
+    a = np.asarray(img).astype(np.float64) / 255.0
+    if gamma and gamma != 1.0:
+        a = a ** gamma
+    if sat and sat != 1.0:
+        lum = (a @ [0.2126, 0.7152, 0.0722])[..., None]
+        a = np.clip(lum + (a - lum) * sat, 0, 1)
+    return Image.fromarray((np.clip(a, 0, 1) * 255).round().astype(np.uint8), "RGB")
+
+
 def reframe(src: Image.Image, zoom: float, dy: float) -> tuple[Image.Image, str]:
     w, h = SIZE
     cw, ch = w / zoom, h / zoom
@@ -125,6 +149,10 @@ def main() -> None:
             shutil.copy2(live, keep)
             print(f"{hero}: 原圖已備份到 _orig/")
         out, note = reframe(Image.open(keep).convert("RGB"), adj["zoom"], adj["dy"])
+        g, sat = adj.get("gamma", 1.0), adj.get("sat", 1.0)
+        if g != 1.0 or sat != 1.0:
+            out = tone(out, g, sat)
+            note += f" · gamma {g:.2f} 飽和 ×{sat:.2f}"
         print(f"{hero:<15}{note}")
         if not args.check:
             out.save(live, quality=88, subsampling=1, optimize=True)
