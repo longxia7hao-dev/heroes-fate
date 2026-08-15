@@ -984,8 +984,21 @@
 
 /* ── 舞台的「點一下跳過」提示（v1.42）──────────────────────────── */
 
-/* 樣式刻意跟 `.hero-cut .cut-tap-hint` 一致：同一個手勢就該長同一個樣子。
-   只有在 `#stage` 掛上 `can-tap` 時才顯示。 */
+/**
+ * 樣式沿用 `.hero-cut .cut-tap-hint`：同一個手勢就該長同一個樣子。
+ *
+ * ⚠️ **兩個效能上的地雷，都踩過了（v1.42 → v1.43 修）：**
+ *
+ * 1. **只給 `opacity: 0` 不夠，要 `visibility: hidden`。**
+ *    這顆提示是 `.stage-world` 的常駐子元素，整段演出都在 DOM 裡。
+ *    `opacity: 0` 的元素**仍然會被繪製與合成**；`.hero-cut .cut-tap-hint` 之所以沒事，
+ *    是因為它的父層 `.hero-cut` 在非作用時是 `visibility: hidden`，整棵子樹都不畫。
+ *
+ * 2. **不要用 `backdrop-filter`。** 它要把「背後的東西」取樣再模糊，
+ *    而這顆的背後是**整片全螢幕、正在播放的舞台影片**，等於每一格畫面都要
+ *    對整個背景做一次模糊 —— 手機上就是整段演出都在掉幀。
+ *    背景本來就是暗的，改用不透明一點的純色，看起來一模一樣但零成本。
+ */
 .stage-tap-hint {
   position: absolute;
   left: max(0.7rem, env(safe-area-inset-left, 0px));
@@ -994,16 +1007,29 @@
   padding: 0.28rem 0.62rem;
   border: 1px solid rgba(216, 194, 244, 0.32);
   border-radius: 999px;
-  background: rgba(8, 3, 18, 0.56);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
+  background: rgba(8, 3, 18, 0.78);
   color: #cfc3e6;
   font-size: 0.62rem;
   letter-spacing: 0.04em;
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity 200ms ease;
+  transition: opacity 200ms ease, visibility 0s linear 200ms;
 }
 .stage.can-tap .stage-tap-hint {
   opacity: 0.9;
+  visibility: visible;
+  transition: opacity 200ms ease;
+}
+
+/**
+ * 「略過動畫」那顆鈕原本也有 `backdrop-filter: blur(7px)`（revamp.css:2063），
+ * 而它**整段演出都壓在播放中的全螢幕影片上** —— 跟上面那顆提示是同一個問題：
+ * 每一格畫面都要把背後的影片取樣再模糊。
+ * 背景本來就夠暗，改成不透明一點的純色，看起來一樣但不用每格重算。
+ */
+.skip-bar .btn {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: rgba(8, 3, 18, 0.86);
 }
