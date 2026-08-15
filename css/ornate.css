@@ -981,3 +981,29 @@
   .rank-card { animation: none; }
   .rk-inner { transition-duration: 1ms; }
 }
+
+/* ── 舞台的「點一下跳過」提示（v1.42）──────────────────────────── */
+
+/* 樣式刻意跟 `.hero-cut .cut-tap-hint` 一致：同一個手勢就該長同一個樣子。
+   只有在 `#stage` 掛上 `can-tap` 時才顯示。 */
+.stage-tap-hint {
+  position: absolute;
+  left: max(0.7rem, env(safe-area-inset-left, 0px));
+  bottom: calc(0.55rem + env(safe-area-inset-bottom, 0px));
+  z-index: 9;
+  padding: 0.28rem 0.62rem;
+  border: 1px solid rgba(216, 194, 244, 0.32);
+  border-radius: 999px;
+  background: rgba(8, 3, 18, 0.56);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  color: #cfc3e6;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+.stage.can-tap .stage-tap-hint {
+  opacity: 0.9;
+}

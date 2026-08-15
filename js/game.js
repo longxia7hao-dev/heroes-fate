@@ -793,6 +793,8 @@
   function stopStageVideo(video = $("#stage-video"), release = true) {
     if (!video) return;
     video.classList.remove("show");
+    // 下一支不見得也是橫式，object-fit 一定要還原，否則直式片會被加上黑邊
+    video.style.objectFit = "";
     try {
       video.pause();
       if (release) {
@@ -954,14 +956,42 @@
   }
 
   /**
-   * 魔王降臨片（1.35MB）在選模式那一頁就開始抓：ACT2 一到就要播，
+   * 魔王名冊。**每一局隨機選一隻**（睿哥 2026-08-15）。
+   *
+   * 這個隨機**不走 seedRun 的那條流**，用 `Math.random()` 就好 ——
+   * 魔王是誰對「誰被抽中」沒有任何影響，純粹是演出。
+   * 專案鐵則管的是結果必須 seed-first，這裡不在它的射程內。
+   *
+   * `fit: "contain"` 是給**橫式**素材用的：舞台是直向全螢幕、`object-fit: cover`，
+   * 1728×1152 的片子塞進去只會看到中間四成，魔王的身體會被切掉。
+   */
+  const BOSS_ARRIVALS = [
+    { src: "assets/videos/mobile/boss/arrival.mp4", poster: "assets/videos/poster/boss/arrival.jpg" },
+    { src: "assets/videos/mobile/boss/arrival_ember.mp4", poster: "assets/videos/poster/boss/arrival_ember.jpg" },
+    { src: "assets/videos/mobile/boss/arrival_golem.mp4", poster: "assets/videos/poster/boss/arrival_golem.jpg", fit: "contain" },
+  ];
+  /** 這一局選中的魔王。進模式頁時抽，抽完就預抓那一支。 */
+  let currentArrival = BOSS_ARRIVALS[0];
+
+  /**
+   * 魔王降臨片（0.6–1.4MB）在選模式那一頁就開始抓：ACT2 一到就要播，
    * 等到那一刻才下載，4G 上必定卡住或整段被跳過。
+   * **抽魔王也在這裡** —— 抽完才知道要預抓哪一支，不然會抓錯白花流量。
    */
   let arrivalPrefetch = null;
   function prefetchArrivalClip() {
-    if (arrivalPrefetch) return;
+    const pick = BOSS_ARRIVALS[Math.floor(Math.random() * BOSS_ARRIVALS.length)];
+    if (arrivalPrefetch && pick.src === currentArrival.src) return;
+    // 換人了就把上一支放掉，不要留著佔記憶體與流量
     try {
-      const url = "assets/videos/mobile/boss/arrival.mp4";
+      arrivalPrefetch?.pause();
+      arrivalPrefetch?.removeAttribute("src");
+      arrivalPrefetch?.load();
+    } catch (_) {}
+    arrivalPrefetch = null;
+    currentArrival = pick;
+    try {
+      const url = pick.src;
       const el = document.createElement("video");
       el.preload = "auto";
       el.muted = true;
@@ -990,6 +1020,8 @@
     stopStageVideo(video, true);
     try {
       if (opts.poster) video.poster = opts.poster;
+      // 橫式素材要 contain，不然直向舞台的 cover 會把兩側裁掉
+      video.style.objectFit = opts.fit || "";
       video.src = window.HF_VideoPlayer?.versioned
         ? window.HF_VideoPlayer.versioned(url)
         : url;
@@ -1010,8 +1042,11 @@
       try { opts.onPlay?.(); } catch (_) {}
       // untilEnded：等 ended 事件而不是硬等固定秒數，播多久就是多久，
       // 起播晚了也不會被攔腰切掉（durationMs 此時只當保險上限）。
-      if (opts.untilEnded) await waitClipEnd(video, Math.max(600, durationMs | 0));
-      else await wait(Math.max(180, durationMs | 0));
+      if (opts.untilEnded) {
+        // 有給 tapTarget 就允許點一下提早結束，跟英雄攻擊切入同一套手勢
+        if (opts.tapTarget) await waitClipEndOrTap(video, opts.tapTarget, Math.max(600, durationMs | 0));
+        else await waitClipEnd(video, Math.max(600, durationMs | 0));
+      } else await wait(Math.max(180, durationMs | 0));
       return !video.error;
     } finally {
       // Always clears the overlay, including an early Skip.
@@ -1414,7 +1449,9 @@
       hideBanner();
       smoke.classList.remove("on");
       spot.classList.remove("on");
-      stage.classList.remove("shake", "dark");
+      // can-tap 也要在這裡收：中途跳過或出錯時，魔王降臨那段的
+      // remove 不一定跑得到，提示會一直掛在畫面上
+      stage.classList.remove("shake", "dark", "can-tap");
       boss.classList.remove("show", "roar", "hurt", "down", "enter");
       victory.classList.remove("show", "film", "film-hit", "film-win");
       cine.classList.remove("show");
@@ -1751,14 +1788,21 @@
     // 結果是「重音對著還沒出現的畫面響，吼聲響在全軍突擊上面」，
     // 中間 6 秒的降臨反而是全靜音。改成兩個都跟著影片走。
     let roarTimer = 0;
+    // 這一局的魔王在進模式頁時就抽好了（見 prefetchArrivalClip），
+    // 所以預抓的跟現在要播的一定是同一支。
+    const arrival = currentArrival;
+    stage.classList.add("can-tap");
     const arrivalPlayed = await playStageClip(
       video,
-      "assets/videos/mobile/boss/arrival.mp4",
+      arrival.src,
       9000 * fast,
       {
-        poster: artUrl("assets/videos/poster/boss/arrival.jpg"),
+        poster: artUrl(arrival.poster),
+        fit: arrival.fit,
         readyMs: 8000,
         untilEnded: true,
+        // 一鍵跳過：跟英雄攻擊切入同一套（click、前 600ms 防誤觸）
+        tapTarget: stage,
         onPlay: () => {
           // 第一幀＝降臨重音
           audioCue("boss.enter", { group: "presentation" });
@@ -1771,6 +1815,7 @@
         },
       }
     );
+    stage.classList.remove("can-tap");
     // 影片比預期短（載不動、被跳過）時 roarTimer 還沒燒到，這裡補吼一聲 ——
     // 不補的話「魔王降臨卻完全沒聲音」會再發生一次。
     if (roarTimer) {

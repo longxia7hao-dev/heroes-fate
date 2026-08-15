@@ -23,7 +23,7 @@
   <link rel="stylesheet" href="css/revamp.css?v=28" />
   <!-- 介面提升層：疊在最後，專門處理 2026-08-14 視覺稿的金框／金屬按鈕語言。
        要退版把這一行拿掉即可，不影響 revamp.css。 -->
-  <link rel="stylesheet" href="css/ornate.css?v=10" />
+  <link rel="stylesheet" href="css/ornate.css?v=11" />
   <!-- 魔王立繪：魔王討伐已完全不用它，只剩命運淘汰會用到，所以降為低優先，不跟影片搶頻寬 -->
   <link rel="preload" as="image" href="assets/boss_model_v3.webp" type="image/webp" fetchpriority="low" />
 </head>
@@ -67,7 +67,7 @@
           而且開著不重整就永遠不會重抓），所有 ?v= 都不會生效 ——
           那時這行會停在舊版本號，或整行不存在。**改版時記得改這裡。**
         -->
-        <p class="build-stamp" id="build-stamp">v1.41 · 0815-1620</p>
+        <p class="build-stamp" id="build-stamp">v1.42 · 0815-2123</p>
         <!-- 偵測到線上有新版時才出現；點一下重新載入 -->
         <button class="build-update" id="build-update" type="button" hidden>有新版本 · 點一下更新</button>
       </div>
@@ -205,6 +205,8 @@
           <!-- 命運排序的牌陣：先全部卡背朝上排好（看得出有幾張），再同時翻面 -->
           <div class="rank-cards" id="rank-cards" aria-hidden="true"></div>
           <div class="spotlight" id="spotlight"></div>
+          <!-- 魔王降臨時的「點一下跳過」提示；跟攻擊切入層那顆是同一套語彙 -->
+          <div class="stage-tap-hint" id="stage-tap-hint" aria-hidden="true">點一下跳過</div>
         </div>
         <div class="hero-cut" id="hero-cut" aria-hidden="true">
           <!-- src 由 game.js 逐位角色設成該角的選角頭像（已在快取裡），不預先寫死 -->
@@ -343,12 +345,12 @@
     </div>
   </div>
   <!-- 逐檔素材版本表：由 tools/gen_asset_versions.py 產生，必須排在其他腳本之前 -->
-  <script src="js/assetVersions.js?v=9292c4e5c4"></script>
+  <script src="js/assetVersions.js?v=1f061b9937"></script>
   <script src="js/data.js?v=3"></script>
   <script src="js/rng.js?v=7"></script>
   <script src="js/videoPlayer.js?v=28"></script>
   <script src="js/audioDirector.js?v=18"></script>
   <script src="js/victoryFilm.js?v=12"></script>
-  <script src="js/game.js?v=68"></script>
+  <script src="js/game.js?v=69"></script>
 </body>
 </html>
