@@ -43,28 +43,44 @@ SIZE = (240, 322)
 # zoom：>1 放大（頭變大）。dy：正值把畫面內容**往上**移（頭上移），負值往下。
 # 兩個值都是以原圖 322px 高為單位。
 ADJUST = {
-    # 瞳距 44 → 目標約 60，所以放大 1.30；順便把眼線壓回 210 附近
-    "paladin": {"zoom": 1.30, "dy": 6},
-    # 眼線本來就在 207，問題是頭頂留白太多 —— 往上收一點並略放大
-    "archmage": {"zoom": 1.10, "dy": 14},
-    # 眼線 150 太高，要把頭往下移。它的髮梢已經頂到上緣，
-    # 所以裁切框得伸到畫面外，上方不足的部分用鏡射＋模糊補
-    #（那一帶是暗色天空與城堡剪影，補完看不出來）。
-    "dragon_knight": {"zoom": 1.10, "dy": -46},
+    # 2026-08-15 第二輪：睿哥要「每個角色比例大小、位置高低盡量一致」。
+    # 量法見上面；把同一段 y 帶（150–285）並排、每 20px 畫格線，直接比瞳距。
+    # 讀出來的瞳距中位數約 58px，眼線目標 y≈210。
+    #
+    # ⚠️ 第一輪把 archmage 放大 1.10 是**放錯方向** —— 它本來就是全場最大的一張
+    #（瞳距約 70）。這一輪改回接近原尺寸，只保留「往上移」那部分。
+    "amazon": {"zoom": 1.22, "dy": 6},          # 瞳距約 44，全場最小
+    "archmage": {"zoom": 1.02, "dy": 12},       # 瞳距約 70，全場最大：只上移不放大
+    "dark_fighter": {"zoom": 1.08, "dy": 4},    # 瞳距約 52，眼線 216 偏低
+    "dragon_knight": {"zoom": 1.16, "dy": -44}, # 瞳距約 50；眼線原本 150 太高
+    "paladin": {"zoom": 1.24, "dy": 4},         # 瞳距原本 44，第一輪 1.30 稍過頭
 }
 
 
-def extend_top(img: Image.Image, pad: int) -> Image.Image:
-    """在上緣補 `pad` 像素：取頂端同高的一條鏡射後重模糊，接縫看不出來。"""
-    if pad <= 0:
+
+def extend(img: Image.Image, top: int, bottom: int) -> Image.Image:
+    """上／下緣各補一段：取該端同高的一條鏡射後重模糊，接縫看不出來。
+
+    縮放小於 1（幾乎不放大）又要平移時，裁切框會同時超出上下兩端，
+    所以兩邊都要能補 —— 只做上緣的話 PIL 會丟 "box can't exceed original image size"。
+    """
+    top, bottom = max(0, top), max(0, bottom)
+    if not top and not bottom:
         return img
-    strip = img.crop((0, 0, img.width, min(pad, img.height)))
-    strip = strip.transpose(Image.FLIP_TOP_BOTTOM).filter(ImageFilter.GaussianBlur(6))
-    if strip.height < pad:
-        strip = strip.resize((img.width, pad), Image.LANCZOS)
-    out = Image.new("RGB", (img.width, img.height + pad))
-    out.paste(strip, (0, 0))
-    out.paste(img, (0, pad))
+    out = Image.new("RGB", (img.width, img.height + top + bottom))
+    if top:
+        s = img.crop((0, 0, img.width, min(top, img.height)))
+        s = s.transpose(Image.FLIP_TOP_BOTTOM).filter(ImageFilter.GaussianBlur(6))
+        if s.height < top:
+            s = s.resize((img.width, top), Image.LANCZOS)
+        out.paste(s, (0, 0))
+    out.paste(img, (0, top))
+    if bottom:
+        s = img.crop((0, max(0, img.height - bottom), img.width, img.height))
+        s = s.transpose(Image.FLIP_TOP_BOTTOM).filter(ImageFilter.GaussianBlur(6))
+        if s.height < bottom:
+            s = s.resize((img.width, bottom), Image.LANCZOS)
+        out.paste(s, (0, top + img.height))
     return out
 
 
@@ -75,14 +91,15 @@ def reframe(src: Image.Image, zoom: float, dy: float) -> tuple[Image.Image, str]
     top = cy - ch / 2
     # 用 ceil 不用 round：四捨五入會少補一個像素，top 就會剩下 -0.4，
     # PIL 的 resize(box=...) 不吃負的偏移，直接 ValueError。
-    pad = max(0, math.ceil(-top))
-    work = extend_top(src, pad)
-    top += pad
+    pad_t = max(0, math.ceil(-top))
+    pad_b = max(0, math.ceil(top + ch - src.height))
+    work = extend(src, pad_t, pad_b)
+    top += pad_t
     left = cx - cw / 2
     box = (left, top, left + cw, top + ch)
     note = f"zoom {zoom:.2f} dy {dy:+.0f} 裁切 {tuple(round(v) for v in box)}"
-    if pad:
-        note += f" · 上緣補 {pad}px"
+    if pad_t or pad_b:
+        note += f" · 補邊 上{pad_t} 下{pad_b}px"
     return work.resize(SIZE, Image.LANCZOS, box=box), note
 
 
