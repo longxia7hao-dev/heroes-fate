@@ -23,7 +23,7 @@
   <link rel="stylesheet" href="css/revamp.css?v=28" />
   <!-- 介面提升層：疊在最後，專門處理 2026-08-14 視覺稿的金框／金屬按鈕語言。
        要退版把這一行拿掉即可，不影響 revamp.css。 -->
-  <link rel="stylesheet" href="css/ornate.css?v=12" />
+  <link rel="stylesheet" href="css/ornate.css?v=13" />
   <!-- 魔王立繪：魔王討伐已完全不用它，只剩命運淘汰會用到，所以降為低優先，不跟影片搶頻寬 -->
   <link rel="preload" as="image" href="assets/boss_model_v3.webp" type="image/webp" fetchpriority="low" />
 </head>
@@ -67,9 +67,7 @@
           而且開著不重整就永遠不會重抓），所有 ?v= 都不會生效 ——
           那時這行會停在舊版本號，或整行不存在。**改版時記得改這裡。**
         -->
-        <p class="build-stamp" id="build-stamp">v1.44 · 0816-1106</p>
-        <!-- 偵測到線上有新版時才出現；點一下重新載入 -->
-        <button class="build-update" id="build-update" type="button" hidden>有新版本 · 點一下更新</button>
+        <p class="build-stamp" id="build-stamp">v1.45 · 0816-1149</p>
       </div>
     </section>
 
@@ -344,6 +342,17 @@
       <span></span><span></span><span></span><span></span>
     </div>
   </div>
+  <!--
+    有新版時的橫幅。**刻意放在 body 直屬層、不放在首頁面板裡** ——
+    放在 `#screen-home` 內的話，一切換頁面它就跟著消失（那個 section 會被隱藏），
+    玩到一半就永遠看不到提示。它是 `position: fixed`，固定在畫面最上方。
+
+    ⚠️ 而且**必須排在 `js/game.js` 之前**：`watchForNewBuild()` 是在腳本載入當下
+    就去 `$("#build-update")`，排在腳本後面的話那時還沒進 DOM，抓到 null 直接 return，
+    整個更新提示就永遠不會出現（我剛剛就是這樣，量到 hidden 一直是 true）。
+  -->
+  <button class="build-update" id="build-update" type="button" hidden>有新版本 · 點一下更新</button>
+
   <!-- 逐檔素材版本表：由 tools/gen_asset_versions.py 產生，必須排在其他腳本之前 -->
   <script src="js/assetVersions.js?v=1f061b9937"></script>
   <script src="js/data.js?v=3"></script>

@@ -329,20 +329,46 @@
 }
 
 /* 有新版可用時才顯示（見 game.js 的 watchForNewBuild） */
+/**
+ * 有新版可用時的提示。
+ *
+ * ⚠️ **它本來是首頁最下面的一顆小藥丸，等於沒有用。**
+ * 「改了但手機還是舊的」在這個專案已經誤判過四次以上
+ *（v1.11／v1.24／v1.25／v1.44 的「魔王都沒換」），每次都得來回好幾輪才確認
+ * 問題不在程式而在快取。提示放在**要捲到底才看得到**的位置，
+ * 玩家自然不會注意到 —— 所以改成**固定在畫面最上方的整條橫幅**，
+ * 不管在哪一頁、有沒有捲動都看得到。
+ */
 .build-update {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
   display: block;
-  margin: 0.5rem auto 0;
-  padding: 0.4rem 0.9rem;
-  border: 1px solid rgba(233, 196, 119, 0.7);
-  border-radius: 99px;
-  background: linear-gradient(180deg, #4d2694, #2a1252);
-  color: #ffeec2;
-  font: 700 0.72rem/1 inherit;
-  letter-spacing: 0.04em;
+  width: 100%;
+  margin: 0;
+  padding: calc(0.55rem + env(safe-area-inset-top, 0px)) 0.9rem 0.55rem;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 223, 160, 0.55);
+  border-radius: 0;
+  background: linear-gradient(180deg, #6c3ad0, #3a1a7a);
+  color: #fff6dc;
+  font: 800 0.86rem/1.25 inherit;
+  letter-spacing: 0.03em;
+  text-align: center;
   cursor: pointer;
-  box-shadow: 0 0 18px rgba(255, 199, 92, 0.3);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5);
+  animation: hf-update-pulse 1.6s ease-in-out infinite alternate;
+}
+@keyframes hf-update-pulse {
+  from { background: linear-gradient(180deg, #6c3ad0, #3a1a7a); }
+  to { background: linear-gradient(180deg, #8a52f0, #4a22a0); }
 }
 .build-update[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .build-update { animation: none; }
+}
 
 /* ── 版面（v1.27）─────────────────────────────────────────────────── */
 
