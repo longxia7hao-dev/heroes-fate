@@ -970,8 +970,18 @@
     { src: "assets/videos/mobile/boss/arrival_ember.mp4", poster: "assets/videos/poster/boss/arrival_ember.jpg" },
     { src: "assets/videos/mobile/boss/arrival_golem.mp4", poster: "assets/videos/poster/boss/arrival_golem.jpg", fit: "contain" },
   ];
-  /** 這一局選中的魔王。進模式頁時抽，抽完就預抓那一支。 */
+  /** 這一局選中的魔王。 */
   let currentArrival = BOSS_ARRIVALS[0];
+  /**
+   * 這隻是不是已經被某一局用掉了。
+   *
+   * ⚠️ **這個旗標是為了「再來一局」存在的。** 抽籤原本只寫在「進模式頁」，
+   * 但 `#btn-replay` 是**直接呼叫 `startMode()`、不經過模式頁**的 ——
+   * 於是重玩幾次都還是第一次抽到的那隻，睿哥實測「怎麼都沒有新增的魔物出現」
+   * 就是這樣來的。現在改成：進模式頁先抽一次（爭取預抓時間），
+   * 而 `startMode()` 發現上一隻已經用過就**重抽**。
+   */
+  let arrivalUsed = false;
 
   /**
    * 魔王降臨片（0.6–1.4MB）在選模式那一頁就開始抓：ACT2 一到就要播，
@@ -981,6 +991,7 @@
   let arrivalPrefetch = null;
   function prefetchArrivalClip() {
     const pick = BOSS_ARRIVALS[Math.floor(Math.random() * BOSS_ARRIVALS.length)];
+    arrivalUsed = false;
     if (arrivalPrefetch && pick.src === currentArrival.src) return;
     // 換人了就把上一支放掉，不要留著佔記憶體與流量
     try {
@@ -1230,6 +1241,9 @@
 
   function startMode(mode, opts = {}) {
     if (state.presenting) return;
+    // 「再來一局」不經過模式頁，所以重抽要放在這裡，否則每局都是同一隻魔王
+    if (arrivalUsed) prefetchArrivalClip();
+    arrivalUsed = true;
     state.mode = mode;
     if (opts.teamCount) state.teamCount = opts.teamCount;
     state.skip = false;
