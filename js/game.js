@@ -962,13 +962,15 @@
    * 魔王是誰對「誰被抽中」沒有任何影響，純粹是演出。
    * 專案鐵則管的是結果必須 seed-first，這裡不在它的射程內。
    *
-   * `fit: "contain"` 是給**橫式**素材用的：舞台是直向全螢幕、`object-fit: cover`，
-   * 1728×1152 的片子塞進去只會看到中間四成，魔王的身體會被切掉。
+   * `fit` 是給**橫式**素材留的後路：舞台是直向全螢幕、預設 `object-fit: cover`，
+   * 橫式片塞進去只會看到中間四成、身體被切掉，那種情況要改成 `contain`。
+   * 目前三支都是直式（岩石巨獸 2026-08-16 已換成 1088×1920 的直式版），
+   * 所以沒有人用到它 —— 但機制留著，下次再收到橫式素材就不用重寫。
    */
   const BOSS_ARRIVALS = [
     { src: "assets/videos/mobile/boss/arrival.mp4", poster: "assets/videos/poster/boss/arrival.jpg" },
     { src: "assets/videos/mobile/boss/arrival_ember.mp4", poster: "assets/videos/poster/boss/arrival_ember.jpg" },
-    { src: "assets/videos/mobile/boss/arrival_golem.mp4", poster: "assets/videos/poster/boss/arrival_golem.jpg", fit: "contain" },
+    { src: "assets/videos/mobile/boss/arrival_golem.mp4", poster: "assets/videos/poster/boss/arrival_golem.jpg" },
   ];
   /** 這一局選中的魔王。 */
   let currentArrival = BOSS_ARRIVALS[0];
