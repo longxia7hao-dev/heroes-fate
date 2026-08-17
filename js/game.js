@@ -25,6 +25,25 @@
   /** 降臨影片播到這一刻下魔王吼聲（片長 6.04s，吼聲 2.2s，剛好收在片尾前） */
   const BOSS_ROAR_CUE_MS = 3400;
 
+  /**
+   * 背景預熱必須服從裝置與網路，而不是把所有影片一起塞給瀏覽器。
+   * Safari 沒有 navigator.connection / deviceMemory 時會落到標準模式；
+   * 只有明確開啟省流量、2G，或硬體非常受限時才停掉純裝飾動畫。
+   */
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  const effectiveType = String(connection?.effectiveType || "").toLowerCase();
+  const deviceMemory = Number(navigator.deviceMemory || 0);
+  const cpuCores = Number(navigator.hardwareConcurrency || 0);
+  const MEDIA_POLICY = Object.freeze({
+    constrainedNetwork: connection?.saveData === true || /(^|slow-)2g/.test(effectiveType),
+    lite:
+      connection?.saveData === true ||
+      /(^|slow-)2g/.test(effectiveType) ||
+      (deviceMemory > 0 && deviceMemory <= 2) ||
+      (cpuCores > 0 && cpuCores <= 2),
+  });
+  document.documentElement.classList.toggle("perf-lite", MEDIA_POLICY.lite);
+
   const state = {
     count: 4,
     players: [], // { heroId, hero }
@@ -150,6 +169,7 @@
     if (name !== "result" && $("#screen-result")?.classList.contains("active")) {
       stopResultPortrait();
     }
+    if (previous === "mode" && name !== "play") releaseArrivalPrefetch();
     document.body.dataset.screen = name;
     $("#app")?.setAttribute("data-screen", name);
     screens.forEach((id) => {
@@ -263,115 +283,13 @@
     });
   }
 
-  /**
-   * 人數頁就把 13 支待選片依序抓進快取，之後點任何角色都能立刻播，
-   * 不必等當下才開始下載（手機 4G 的卡頓主因）。
-   */
-  const waitPrefetchPool = [];
-  let waitPrefetchStarted = false;
-
-  /**
-   * 放掉一支預抓影片，並中止它還沒下載完的部分。
-   * `preload="auto"` 的 video 就算已經 canplay 也會**繼續**把整支抓完，
-   * 13 支疊起來就是 13 條連線在背景吃頻寬 —— 4G 上這是致命的。
-   */
-  function releaseWaitClip(el) {
-    if (!el) return;
-    try {
-      el.removeAttribute("src");
-      el.load();
-    } catch (_) {}
-  }
-
-  /** 選角舞台正在等影片就緒時暫停預抓（上限 6 秒，避免整串卡死） */
-  async function yieldToActivePick() {
-    const busy = () => {
-      const st = pickVideo?.el?.dataset?.state;
-      return st === "loading" || st === "confirm-loading";
-    };
-    if (!busy()) return;
-    // 玩家正盯著舞台等 → 背景那幾條連線立刻收掉，頻寬全給他眼前那一支
-    while (waitPrefetchPool.length) releaseWaitClip(waitPrefetchPool.pop());
-    const until = performance.now() + 6000;
-    while (busy() && performance.now() < until) {
-      await new Promise((r) => setTimeout(r, 200));
-    }
-  }
-
-  async function prefetchWaitClips() {
-    if (waitPrefetchStarted || !window.HF_VideoPlayer?.loadManifest) return;
-    waitPrefetchStarted = true;
-    try {
-      await window.HF_VideoPlayer.loadManifest();
-    } catch (_) {
-      return;
-    }
-    // 連續幾支都慢就整串停掉：這條線路撐不起預抓，硬抓只會害玩家眼前那支更慢
-    let slowStrikes = 0;
-    for (const hero of HEROES) {
-      // 玩家眼前那支還在載的時候先讓路：預抓是排隊在後面的 13 支，
-      // 搶了頻寬就會變成「點了角色卻停在空舞台」（龍騎士排最後最明顯）。
-      await yieldToActivePick();
-      const url = window.HF_VideoPlayer.videoUrl(hero.id, "wait");
-      if (!url) continue;
-      const el = document.createElement("video");
-      el.preload = "auto";
-      el.muted = true;
-      el.playsInline = true;
-      el.src = window.HF_VideoPlayer.versioned(url);
-      try { el.load(); } catch (_) {}
-      const startedAt = performance.now();
-      // 一支一支來，避免同時開 13 條連線把頻寬吃光
-      const ready = await new Promise((resolve) => {
-        let done = false;
-        const fin = (ok) => {
-          if (done) return;
-          done = true;
-          clearTimeout(t);
-          el.removeEventListener("canplaythrough", onOk);
-          el.removeEventListener("canplay", onOk);
-          el.removeEventListener("error", onBad);
-          resolve(ok);
-        };
-        const onOk = () => fin(true);
-        const onBad = () => fin(false);
-        el.addEventListener("canplaythrough", onOk, { once: true });
-        el.addEventListener("canplay", onOk, { once: true });
-        el.addEventListener("error", onBad, { once: true });
-        const t = setTimeout(() => fin(false), 2500);
-      });
-      const tookMs = performance.now() - startedAt;
-
-      if (ready) {
-        // 同時間最多留 2 支在背景把剩下的抓完，其餘放掉
-        waitPrefetchPool.push(el);
-        while (waitPrefetchPool.length > 2) releaseWaitClip(waitPrefetchPool.shift());
-      } else {
-        releaseWaitClip(el);
-      }
-
-      if (!ready || tookMs > 2000) {
-        if (++slowStrikes >= 2) break;
-      } else {
-        slowStrikes = 0;
-      }
-    }
-  }
-
   function warmPickAssets() {
     ensurePlayers();
-    const taken = takenHeroIds();
-    const current = state.players[state.pickIndex]?.heroId;
-    const hero = heroById(current) || HEROES.find((h) => !taken.has(h.id)) || HEROES[0];
-    const vp = ensurePickVideo();
-    if (hero && vp?.prepare) {
-      vp.prepare(hero.id).catch(() => {});
-    } else {
-      window.HF_VideoPlayer?.loadManifest?.().catch(() => {});
-    }
+    // 人數頁不知道玩家會點誰，只暖 2KB manifest；任意抓第一位英雄的
+    // wait + confirm 會白耗約 700KB，還可能跟真正點選的角色搶連線。
+    window.HF_VideoPlayer?.loadManifest?.().catch(() => {});
     const warm = () => {
       warmHeroThumbnails();
-      prefetchWaitClips();
     };
     if (typeof window.requestIdleCallback === "function") {
       window.requestIdleCallback(warm, { timeout: 350 });
@@ -412,21 +330,31 @@
   }
 
   function bindHeroCards(root) {
-    if (!root) return;
-    root.querySelectorAll(".hero-card:not(.locked)").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        if (pickBusy) return;
-        const id = btn.dataset.id;
-        if (!id) return;
-        state.selectedHeroId = id;
-        haptic(8);
-        audioCue("pick.preview", { group: "ui" });
-        renderHeroGrid();
-        updateModelPreview();
-        updatePickButtons();
-        const h = heroById(id);
-        setPickStatus(`已預覽：${h?.name || id}　→ 請按「決定」鎖定`);
-      });
+    if (!root || root.dataset.hfBound === "1") return;
+    root.dataset.hfBound = "1";
+
+    // 手指壓下的那一刻就把頻寬交給眼前這支，不再背景掃完整個角色名冊。
+    root.addEventListener("pointerdown", (event) => {
+      const btn = event.target.closest?.(".hero-card[data-id]");
+      if (!btn || !root.contains(btn) || btn.disabled || pickBusy) return;
+      const id = btn.dataset.id;
+      if (!id) return;
+      ensurePickVideo()?.prime?.(id, "wait")?.catch?.(() => {});
+    }, { passive: true });
+
+    root.addEventListener("click", (event) => {
+      const btn = event.target.closest?.(".hero-card[data-id]");
+      if (!btn || !root.contains(btn) || btn.disabled || pickBusy) return;
+      const id = btn.dataset.id;
+      if (!id) return;
+      state.selectedHeroId = id;
+      haptic(8);
+      audioCue("pick.preview", { group: "ui" });
+      renderHeroGrid();
+      updateModelPreview();
+      updatePickButtons();
+      const h = heroById(id);
+      setPickStatus(`已預覽：${h?.name || id}　→ 請按「決定」鎖定`);
     });
   }
 
@@ -440,45 +368,67 @@
     if (!grid) return;
 
     grid.hidden = false;
-    grid.innerHTML = HEROES.map((h) => {
+    // 14 張圖只建立一次；之後換玩家只更新狀態，避免同一幀反覆解碼圖片與重排。
+    if (grid.children.length !== HEROES.length) {
+      grid.innerHTML = HEROES.map((h) => heroCardHtml(h, false, false)).join("");
+    }
+    bindHeroCards(grid);
+    HEROES.forEach((h) => {
+      const btn = grid.querySelector(`[data-id="${h.id}"]`);
+      if (!btn) return;
       const locked = taken.has(h.id) && h.id !== currentPick;
       const selected = state.selectedHeroId === h.id;
-      return heroCardHtml(h, locked, selected);
-    }).join("");
-    bindHeroCards(grid);
+      btn.classList.toggle("locked", locked);
+      btn.classList.toggle("selected", selected);
+      btn.disabled = locked || pickBusy;
+      btn.setAttribute("aria-pressed", String(selected));
+    });
   }
 
   function renderPartyDots() {
     const box = $("#party-dots");
     if (!box) return;
-    box.innerHTML = state.players
-      .map((p, i) => {
-        const cls = [
-          "pdot",
-          p.heroId ? "done" : "",
-          i === state.pickIndex ? "current" : "",
-        ]
-          .filter(Boolean)
-          .join(" ");
-        const img = p.heroId
-          ? `<img src="${heroThumb(p.heroId)}" alt="" />`
-          : `<span>${i + 1}</span>`;
-        const title = p.heroId
-          ? `${playerLabel(i)} · ${heroById(p.heroId)?.name || p.heroId}`
-          : `${playerLabel(i)} · 未選`;
-        return `<button type="button" class="${cls}" data-slot="${i}" title="${title}"
-          aria-label="${title}" ${pickBusy ? "disabled" : ""}>${img}</button>`;
-      })
-      .join("");
-    box.querySelectorAll(".pdot[data-slot]").forEach((dot) => {
-      dot.addEventListener("click", () => {
-        if (pickBusy) return;
+    if (box.children.length !== state.players.length) {
+      box.innerHTML = state.players
+        .map((_, i) => `<button type="button" class="pdot" data-slot="${i}"><span>${i + 1}</span></button>`)
+        .join("");
+    }
+    if (box.dataset.hfBound !== "1") {
+      box.dataset.hfBound = "1";
+      box.addEventListener("click", (event) => {
+        const dot = event.target.closest?.(".pdot[data-slot]");
+        if (!dot || !box.contains(dot) || pickBusy) return;
         const slot = Number(dot.dataset.slot);
         if (!Number.isInteger(slot) || slot < 0 || slot >= state.players.length) return;
         state.pickIndex = slot;
         haptic(7);
         loadPickSelection();
       });
+    }
+    state.players.forEach((p, i) => {
+      const dot = box.children[i];
+      if (!dot) return;
+      dot.classList.toggle("done", !!p.heroId);
+      dot.classList.toggle("current", i === state.pickIndex);
+      dot.disabled = pickBusy;
+      const title = p.heroId
+        ? `${playerLabel(i)} · ${heroById(p.heroId)?.name || p.heroId}`
+        : `${playerLabel(i)} · 未選`;
+      dot.title = title;
+      dot.setAttribute("aria-label", title);
+      if ((dot.dataset.heroId || "") !== (p.heroId || "")) {
+        dot.dataset.heroId = p.heroId || "";
+        if (p.heroId) {
+          const img = document.createElement("img");
+          img.src = heroThumb(p.heroId);
+          img.alt = "";
+          dot.replaceChildren(img);
+        } else {
+          const label = document.createElement("span");
+          label.textContent = String(i + 1);
+          dot.replaceChildren(label);
+        }
+      }
     });
   }
 
@@ -524,7 +474,7 @@
       if (weapon) weapon.textContent = "";
       if (flavor) flavor.textContent = "";
       pedestal?.classList.add("is-empty");
-      try { ensurePickVideo()?.pause?.(); } catch (_) {}
+      try { pickVideo?.pause?.(); } catch (_) {}
       return;
     }
 
@@ -654,15 +604,21 @@
   }
 
   /* ---- PRESENTATION ---- */
+  const PRESENTATION_SKIP_EVENT = "hf-presentation-skip";
+
   function wait(ms) {
     return new Promise((resolve) => {
-      const t0 = performance.now();
-      const tick = () => {
-        if (state.skip) return resolve();
-        if (performance.now() - t0 >= ms) return resolve();
-        requestAnimationFrame(tick);
+      if (state.skip) return resolve();
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        window.removeEventListener(PRESENTATION_SKIP_EVENT, finish);
+        resolve();
       };
-      requestAnimationFrame(tick);
+      const timer = setTimeout(finish, Math.max(0, ms | 0));
+      window.addEventListener(PRESENTATION_SKIP_EVENT, finish, { once: true });
     });
   }
 
@@ -694,29 +650,27 @@
   }
 
   function waitMediaReady(video, timeoutMs = 850) {
-    if (!video) return Promise.resolve(false);
+    if (!video || state.skip) return Promise.resolve(false);
     if (video.readyState >= 3) return Promise.resolve(true);
     return new Promise((resolve) => {
       let done = false;
       let timer = 0;
-      let skipTimer = 0;
       const finish = (ok) => {
         if (done) return;
         done = true;
         clearTimeout(timer);
-        clearInterval(skipTimer);
         video.removeEventListener("canplay", onReady);
         video.removeEventListener("error", onError);
+        window.removeEventListener(PRESENTATION_SKIP_EVENT, onSkip);
         resolve(ok);
       };
       const onReady = () => finish(true);
       const onError = () => finish(false);
+      const onSkip = () => finish(false);
       video.addEventListener("canplay", onReady, { once: true });
       video.addEventListener("error", onError, { once: true });
+      window.addEventListener(PRESENTATION_SKIP_EVENT, onSkip, { once: true });
       timer = setTimeout(() => finish(false), timeoutMs);
-      skipTimer = setInterval(() => {
-        if (state.skip) finish(false);
-      }, 32);
     });
   }
 
@@ -726,14 +680,13 @@
       if (!video || state.skip) return resolve();
       let done = false;
       let timer = 0;
-      let skipTimer = 0;
       const finish = () => {
         if (done) return;
         done = true;
         clearTimeout(timer);
-        clearInterval(skipTimer);
         video.removeEventListener("ended", finish);
         video.removeEventListener("error", finish);
+        window.removeEventListener(PRESENTATION_SKIP_EVENT, finish);
         resolve();
       };
       video.addEventListener("ended", finish, { once: true });
@@ -742,9 +695,7 @@
         ? video.duration * 1000 + 400
         : timeoutMs;
       timer = setTimeout(finish, Math.max(timeoutMs, dur));
-      skipTimer = setInterval(() => {
-        if (state.skip) finish();
-      }, 32);
+      window.addEventListener(PRESENTATION_SKIP_EVENT, finish, { once: true });
     });
   }
 
@@ -757,19 +708,19 @@
       if (!video || state.skip) return resolve("skip");
       let done = false;
       let timer = 0;
-      let skipTimer = 0;
       const finish = (reason) => {
         if (done) return;
         done = true;
         clearTimeout(timer);
-        clearInterval(skipTimer);
         video.removeEventListener("ended", onEnded);
         video.removeEventListener("error", onEnded);
         tapTarget?.removeEventListener("click", onTap);
+        window.removeEventListener(PRESENTATION_SKIP_EVENT, onSkip);
         resolve(reason);
       };
       const startedAt = performance.now();
       const onEnded = () => finish("ended");
+      const onSkip = () => finish("skip");
       // 用 click（tap 完成才觸發）而不是 pointerdown：
       // 滑動、按住不放、手指殘留都不會誤觸發，避免整段攻擊被連續跳掉。
       const onTap = () => {
@@ -784,15 +735,14 @@
         ? (video.duration / CLIP_RATE) * 1000 + 400
         : timeoutMs;
       timer = setTimeout(() => finish("timeout"), Math.max(timeoutMs, dur));
-      skipTimer = setInterval(() => {
-        if (state.skip) finish("skip");
-      }, 32);
+      window.addEventListener(PRESENTATION_SKIP_EVENT, onSkip, { once: true });
     });
   }
 
   function stopStageVideo(video = $("#stage-video"), release = true) {
     if (!video) return;
     video.classList.remove("show");
+    video.closest?.(".stage")?.classList.remove("video-active");
     // 下一支不見得也是橫式，object-fit 一定要還原，否則直式片會被加上黑邊
     video.style.objectFit = "";
     try {
@@ -828,6 +778,7 @@
   function spawnParticles(color = "#d9a5ff", count = 16) {
     const box = $("#fx-particles");
     if (!box) return;
+    if (MEDIA_POLICY.lite) count = Math.min(count, 8);
     const seed = ((state.run?.seed || 0) ^ 0x7f4a7c15 ^ ++fxBeat) >>> 0;
     const rand = window.HF_RNG.mulberry32(seed);
     box.innerHTML = Array.from({ length: count }, () => {
@@ -862,17 +813,29 @@
     if (!line) return;
     line.classList.add("is-battle-hud");
     line.style.opacity = "1";
-    line.innerHTML = players.map((p, i) => {
-      const h = p.hero || heroById(p.heroId);
-      const slot = p.slot ?? i;
-      const active = slot === activeSlot ? " active" : "";
-      const winner = slot === winnerSlot ? " winner" : "";
-      return `<div class="battle-hud-badge${active}${winner}" style="--hc:${h.color}"
-        title="${playerLabel(slot)} · ${h.name}" ${active ? 'aria-current="true"' : ""}>
-        <img src="${heroThumb(h.id)}" alt="" />
-        <span>${slot + 1}</span>
-      </div>`;
-    }).join("");
+    const signature = players
+      .map((p, i) => `${p.slot ?? i}:${(p.hero || heroById(p.heroId))?.id || p.heroId}`)
+      .join("|");
+    if (line.dataset.hfHud !== signature) {
+      line.innerHTML = players.map((p, i) => {
+        const h = p.hero || heroById(p.heroId);
+        const slot = p.slot ?? i;
+        return `<div class="battle-hud-badge" data-slot="${slot}" style="--hc:${h.color}"
+          title="${playerLabel(slot)} · ${h.name}">
+          <img src="${heroThumb(h.id)}" alt="" />
+          <span>${slot + 1}</span>
+        </div>`;
+      }).join("");
+      line.dataset.hfHud = signature;
+    }
+    line.querySelectorAll(".battle-hud-badge[data-slot]").forEach((badge) => {
+      const slot = Number(badge.dataset.slot);
+      const active = slot === activeSlot;
+      badge.classList.toggle("active", active);
+      badge.classList.toggle("winner", slot === winnerSlot);
+      if (active) badge.setAttribute("aria-current", "true");
+      else badge.removeAttribute("aria-current");
+    });
   }
 
   function clearBattleHud() {
@@ -881,11 +844,13 @@
     line.classList.remove("is-battle-hud");
     line.style.opacity = "1";
     line.innerHTML = "";
+    delete line.dataset.hfHud;
   }
 
   /** 魔王戰攻擊切入：優先用雲端「攻擊魔王動畫」，缺片才退回 confirm */
   async function resolveAttackSources(players) {
     if (!window.HF_VideoPlayer?.loadManifest) return new Map();
+    const generation = mediaPrefetchGeneration;
     try {
       await Promise.race([
         window.HF_VideoPlayer.loadManifest(),
@@ -896,62 +861,98 @@
       p.heroId,
       window.HF_VideoPlayer.videoUrl(p.heroId, "attack"),
     ]));
-    prefetchAttackClips(map);
+    if (generation === mediaPrefetchGeneration) prefetchAttackClips(map);
     return map;
   }
 
   /**
-   * 開場就把所有參戰者的攻擊片預抓起來，避免輪到某位時才開始下載，
-   * 造成該段只剩深色底（手機 4G 尤其明顯）。
+   * 媒體管線固定為「畫面上的影片 + 下一支攻擊 + 勝者 final」。
+   * 舊版會在同一瞬間建立 13 attack + 1 final，手機的網路、解碼器與記憶體
+   * 一起被塞滿；現在背景 attack 永遠最多一支，播放中才往前暖下一支。
    */
-  const attackPrefetchPool = [];
-  /** poster 只有 ~30KB，先抓起來，避免攻擊切入第一瞬間整片全黑 */
-  const posterWarmRefs = [];
+  const attackPrefetchPool = new Map();
+  const posterWarmRefs = new Map();
+  let finalPrefetch = null;
+  let mediaPrefetchGeneration = 0;
+
+  function releaseMediaElement(el) {
+    if (!el) return;
+    try {
+      el.pause();
+      el.removeAttribute("src");
+      el.load();
+    } catch (_) {}
+  }
+
   function prefetchPosters(kind, ids) {
     ids.forEach((id) => {
       if (!id) return;
+      const key = `${kind}:${id}`;
+      if (posterWarmRefs.has(key)) return;
       const img = new Image();
       img.decoding = "async";
       // 低優先：poster 只是頂替用，搶在攻擊影片前面反而害它更慢
       try { img.fetchPriority = "low"; } catch (_) {}
       img.src = artUrl(`assets/videos/poster/${kind}/${id}.jpg`);
-      posterWarmRefs.push(img);
+      posterWarmRefs.set(key, img);
+      // 只保留眼前幾張的 JS 引用；圖片本身仍可由 HTTP cache 重用。
+      while (posterWarmRefs.size > 6) {
+        const oldest = posterWarmRefs.keys().next().value;
+        posterWarmRefs.delete(oldest);
+      }
     });
+  }
+
+  function releaseAttackClip(url) {
+    const el = attackPrefetchPool.get(url);
+    if (!el) return;
+    releaseMediaElement(el);
+    attackPrefetchPool.delete(url);
+  }
+
+  function warmAttackClip(url) {
+    if (!url || MEDIA_POLICY.constrainedNetwork || attackPrefetchPool.has(url)) return;
+    // 下一支改變時，立即中止上一個背景下載；不讓晚到請求重新塞回 pool。
+    attackPrefetchPool.forEach((el) => releaseMediaElement(el));
+    attackPrefetchPool.clear();
+    const el = document.createElement("video");
+    el.preload = "auto";
+    el.muted = true;
+    el.playsInline = true;
+    el.src = window.HF_VideoPlayer?.versioned
+      ? window.HF_VideoPlayer.versioned(url)
+      : url;
+    attackPrefetchPool.set(url, el);
+    try { el.load(); } catch (_) {}
   }
 
   function prefetchAttackClips(map) {
-    attackPrefetchPool.length = 0;
-    prefetchPosters("attack", [...map.keys()]);
-    map.forEach((url) => {
-      if (!url) return;
-      const el = document.createElement("video");
-      el.preload = "auto";
-      el.muted = true;
-      el.playsInline = true;
-      el.src = window.HF_VideoPlayer?.versioned
-        ? window.HF_VideoPlayer.versioned(url)
-        : url;
-      try { el.load(); } catch (_) {}
-      attackPrefetchPool.push(el);
-    });
+    const first = [...map.entries()].find(([, url]) => !!url);
+    if (!first) return;
+    prefetchPosters("attack", [first[0]]);
+    warmAttackClip(first[1]);
   }
 
-  /** 勝者的 final 片較大（2–4MB），開場就先抓，免得輪到它才等 */
+  /** 勝者的 final 片較大（2–4MB），第一支攻擊交棒後再抓，避開降臨片。 */
   async function prefetchFinalClip(heroId) {
     if (!heroId) return;
+    const generation = mediaPrefetchGeneration;
     prefetchPosters("final", [heroId]);
     prefetchPosters("victory", [heroId]);
+    if (MEDIA_POLICY.constrainedNetwork) return;
     try {
       await window.HF_VideoPlayer?.loadManifest?.();
+      if (generation !== mediaPrefetchGeneration) return;
       const url = window.HF_VideoPlayer?.videoUrl?.(heroId, "final");
       if (!url) return;
+      releaseMediaElement(finalPrefetch);
       const el = document.createElement("video");
       el.preload = "auto";
       el.muted = true;
       el.playsInline = true;
       el.src = window.HF_VideoPlayer.versioned(url);
       try { el.load(); } catch (_) {}
-      attackPrefetchPool.push(el);
+      finalPrefetch = el;
     } catch (_) {}
   }
 
@@ -991,17 +992,17 @@
    * **抽魔王也在這裡** —— 抽完才知道要預抓哪一支，不然會抓錯白花流量。
    */
   let arrivalPrefetch = null;
+  function releaseArrivalPrefetch() {
+    releaseMediaElement(arrivalPrefetch);
+    arrivalPrefetch = null;
+  }
+
   function prefetchArrivalClip() {
     const pick = BOSS_ARRIVALS[Math.floor(Math.random() * BOSS_ARRIVALS.length)];
     arrivalUsed = false;
     if (arrivalPrefetch && pick.src === currentArrival.src) return;
     // 換人了就把上一支放掉，不要留著佔記憶體與流量
-    try {
-      arrivalPrefetch?.pause();
-      arrivalPrefetch?.removeAttribute("src");
-      arrivalPrefetch?.load();
-    } catch (_) {}
-    arrivalPrefetch = null;
+    releaseArrivalPrefetch();
     currentArrival = pick;
     try {
       const url = pick.src;
@@ -1018,14 +1019,12 @@
   }
 
   function clearAttackPrefetch() {
-    attackPrefetchPool.forEach((el) => {
-      try {
-        el.pause();
-        el.removeAttribute("src");
-        el.load();
-      } catch (_) {}
-    });
-    attackPrefetchPool.length = 0;
+    mediaPrefetchGeneration++;
+    attackPrefetchPool.forEach((el) => releaseMediaElement(el));
+    attackPrefetchPool.clear();
+    releaseMediaElement(finalPrefetch);
+    finalPrefetch = null;
+    posterWarmRefs.clear();
   }
 
   async function playStageClip(video, url, durationMs, opts = {}) {
@@ -1048,8 +1047,15 @@
       const ready = await waitMediaReady(video, opts.readyMs || 1000);
       if (!ready || state.skip) return false;
       try { video.currentTime = 0; } catch (_) {}
+      video.closest?.(".stage")?.classList.add("video-active");
       video.classList.add("show");
-      try { video.play()?.catch?.(() => {}); } catch (_) {}
+      try {
+        const started = video.play();
+        if (started && typeof started.then === "function") await started;
+      } catch (_) {
+        return false;
+      }
+      if (state.skip) return false;
       // 聲音要對得上畫面，就得從「真的開播」這一刻起算 —— 4G 上載入可能等好幾秒，
       // 在 await 之前就下音效會變成「聲音先響、畫面幾秒後才來」。
       try { opts.onPlay?.(); } catch (_) {}
@@ -1078,6 +1084,7 @@
   async function playFinalBlow(player, hero) {
     const root = $("#hero-cut");
     const video = $("#hero-cut-video");
+    const stage = $("#stage");
     if (!root || !video || state.skip || !hero) return false;
     let url = null;
     try {
@@ -1096,6 +1103,7 @@
     root.setAttribute("aria-hidden", "false");
     root.classList.add("show");
     root.classList.remove("can-tap");
+    stage?.classList.add("cut-active");
 
     try {
       video.pause();
@@ -1117,12 +1125,20 @@
         await wait(1600);
         return false;
       }
+      releaseMediaElement(finalPrefetch);
+      finalPrefetch = null;
       try { video.currentTime = 0; } catch (_) {}
       try {
         video.defaultPlaybackRate = CLIP_RATE;
         video.playbackRate = CLIP_RATE;
       } catch (_) {}
-      try { video.play()?.catch?.(() => {}); } catch (_) {}
+      try {
+        const started = video.play();
+        if (started && typeof started.then === "function") await started;
+      } catch (_) {
+        return false;
+      }
+      if (state.skip) return false;
       root.classList.add("is-playing");
       /**
        * ⚠️ 這裡本來是 `audioCue("hero.attack." + hero.id, …)`，但 **cueMap 裡
@@ -1140,16 +1156,32 @@
       await waitClipEnd(video, 14000);
       return true;
     } finally {
+      stage?.classList.remove("cut-active");
       stopHeroCut(true);
     }
   }
 
-  async function playAttackSequence(players, sources) {
+  async function playAttackSequence(players, sources, { winnerId = null } = {}) {
     const root = $("#hero-cut");
     const video = $("#hero-cut-video");
     const stage = $("#stage");
     if (!root || !video || state.skip) return;
     const total = players.length;
+    let finalWarmStarted = false;
+
+    const warmFollowing = (index) => {
+      const next = players[index + 1];
+      const nextHero = next && (next.hero || heroById(next.heroId));
+      if (nextHero) {
+        prefetchPosters("attack", [nextHero.id]);
+        warmAttackClip(sources.get(nextHero.id));
+      }
+      // final 很大，等第一支攻擊真的交棒後才抓；前面仍有其餘攻擊＋命運一擊。
+      if (!finalWarmStarted && winnerId) {
+        finalWarmStarted = true;
+        prefetchFinalClip(winnerId);
+      }
+    };
 
     stage?.classList.add("cut-active");
     root.setAttribute("aria-hidden", "false");
@@ -1178,10 +1210,13 @@
         const source = sources.get(h.id);
         if (!source) {
           window.HF_Audio?.playHeroAttack?.(h.id);
+          warmFollowing(i);
           await wait(500);
           continue;
         }
 
+        prefetchPosters("attack", [h.id]);
+        warmAttackClip(source);
         video.pause();
         // 首幀圖與影片同比例，載入中先頂著，避免黑畫面
         video.poster = artUrl(`assets/videos/poster/attack/${h.id}.jpg`);
@@ -1198,6 +1233,8 @@
         const ready = await waitMediaReady(video, i === 0 ? 6000 : 4500);
         if (state.skip) continue;
         if (!ready) {
+          releaseAttackClip(source);
+          warmFollowing(i);
           // 沒就緒也讓同比例的首幀停一下，不要整位角色憑空消失
           await wait(1200);
           continue;
@@ -1210,9 +1247,19 @@
         root.classList.remove("beat");
         void root.offsetWidth;
         root.classList.add("beat");
-        window.HF_Audio?.playHeroAttack?.(h.id);
-        try { video.play()?.catch?.(() => {}); } catch (_) {}
+        try {
+          const started = video.play();
+          if (started && typeof started.then === "function") await started;
+        } catch (_) {
+          releaseAttackClip(source);
+          warmFollowing(i);
+          continue;
+        }
+        if (state.skip) continue;
+        releaseAttackClip(source);
         root.classList.add("is-playing");
+        window.HF_Audio?.playHeroAttack?.(h.id);
+        warmFollowing(i);
         // 點一下切入層就跳下一位；不點就完整播完
         await waitClipEndOrTap(video, root, 3400);
       }
@@ -1223,22 +1270,38 @@
     }
   }
 
+  const stageHeroNodeCache = new Map();
   function placeHeroes(list, { highlightId, attack } = {}) {
     const line = $("#heroes-line");
+    if (!line) return;
     line.classList.remove("is-battle-hud");
-    line.innerHTML = list
-      .map((p, i) => {
-        const h = p.hero || heroById(p.heroId);
-        const hi = highlightId && h.id === highlightId ? " highlight" : "";
-        const dim = highlightId && h.id !== highlightId ? " dim" : "";
-        const atk = attack && h.id === highlightId ? " attack" : "";
-        return `<div class="stage-hero${hi}${dim}${atk}" style="--hc:${h.color}">
-          <img src="${heroThumb(h.id)}" alt="${h.name}" />
-          <span>${playerLabel(p.slot ?? i)}</span>
-          <small>${h.name}</small>
-        </div>`;
-      })
-      .join("");
+    delete line.dataset.hfHud;
+    const fragment = document.createDocumentFragment();
+    list.forEach((p, i) => {
+      const h = p.hero || heroById(p.heroId);
+      const slot = p.slot ?? i;
+      let node = stageHeroNodeCache.get(slot);
+      if (!node) {
+        node = document.createElement("div");
+        node.className = "stage-hero";
+        node.innerHTML = '<img alt="" /><span></span><small></small>';
+        stageHeroNodeCache.set(slot, node);
+      }
+      if (node.dataset.heroId !== h.id) {
+        node.dataset.heroId = h.id;
+        const img = node.querySelector("img");
+        img.src = heroThumb(h.id);
+        img.alt = h.name;
+        node.querySelector("small").textContent = h.name;
+      }
+      node.querySelector("span").textContent = playerLabel(slot);
+      node.style.setProperty("--hc", h.color);
+      node.classList.toggle("highlight", !!highlightId && h.id === highlightId);
+      node.classList.toggle("dim", !!highlightId && h.id !== highlightId);
+      node.classList.toggle("attack", !!attack && h.id === highlightId);
+      fragment.appendChild(node);
+    });
+    line.replaceChildren(fragment);
   }
 
   function startMode(mode, opts = {}) {
@@ -1259,7 +1322,17 @@
       teamCount: state.teamCount,
       useFateCard: state.opts.fateCard,
     });
-    window.HF_Audio?.preloadHeroes?.(payloadPlayers.map((player) => player.heroId));
+    const result = state.run.result || {};
+    const battleMode = result.mode === "boss" || result.mode === "doom";
+    const winnerId = result.winner?.heroId || result.survivor?.heroId || null;
+    window.HF_Audio?.preloadHeroes?.(
+      payloadPlayers.map((player) => player.heroId),
+      {
+        attacks: battleMode,
+        winnerId,
+        victories: !!winnerId,
+      }
+    );
     audioCue("round.open", { group: "presentation" });
     show("play");
     presentRun();
@@ -1269,12 +1342,21 @@
    * 命運一擊：揭曉前讓全員按住螢幕蓄力。
    * 純儀式 —— 結果早已由 seedRun 定案，這裡只是把揭曉時機交到大家手上。
    */
+  function warmFateCircleAssets() {
+    if (!state.opts.strike) return;
+    $$("#strike-gate .fc-layer[data-src]").forEach((img) => {
+      img.src = img.dataset.src;
+      delete img.dataset.src;
+    });
+  }
+
   function playFateStrike(fast) {
     return new Promise((resolve) => {
       const gate = $("#strike-gate");
       const countEl = $("#strike-count");
       const subEl = $("#strike-sub");
       if (!gate || !state.opts.strike || state.skip) return resolve();
+      warmFateCircleAssets();
 
       const holdMs = Math.max(1200, 3000 * fast); // 睿哥：全員按住 3 秒
       let held = false;
@@ -1472,6 +1554,7 @@
       victory.classList.remove("show", "film", "film-hit", "film-win");
       cine.classList.remove("show");
       cleanupStageMedia({ release: true });
+      releaseArrivalPrefetch();
       clearBattleHud();
       setAct(null);
       const filmHost = $("#film-host");
@@ -1583,6 +1666,20 @@
   const TEAM_LABELS = ["紅隊", "藍隊", "綠隊", "金隊"];
   const TEAM_COLORS = ["#ff7a7a", "#7ec8ff", "#8be08b", "#ffd76a"];
 
+  function ensureBossArt() {
+    const picture = $("#boss picture");
+    const source = picture?.querySelector("source[data-srcset]");
+    const img = picture?.querySelector("img[data-src]");
+    if (source?.dataset.srcset) {
+      source.srcset = artUrl(source.dataset.srcset);
+      delete source.dataset.srcset;
+    }
+    if (img?.dataset.src) {
+      img.src = artUrl(img.dataset.src);
+      delete img.dataset.src;
+    }
+  }
+
   /**
    * 命運淘汰：每輪倒下一位，最後生還者勝出。
    * 淘汰順序在 seedRun 就已決定，這裡只負責演出。
@@ -1678,6 +1775,7 @@
 
   async function presentSurvival(players, result, ctx) {
     const { stage, bg, boss, spot, victory, fast } = ctx;
+    ensureBossArt();
     const survivor = result.survivor;
     prefetchFinalClip((survivor?.hero || heroById(survivor?.heroId))?.id);
     const sh = survivor.hero || heroById(survivor.heroId);
@@ -1779,7 +1877,6 @@
 
     // All presentation media resolves only after the seed-first result above exists.
     const attackSourcesPromise = resolveAttackSources(players);
-    prefetchFinalClip(wh?.id);
     bg.style.backgroundImage = "url(assets/bg_battle_arena_v2.jpg)";
     cine.classList.add("show");
     // 音樂：整場魔王討伐就是 setScene("play") 的討伐曲一首到底，中途不換。
@@ -1820,6 +1917,7 @@
         // 一鍵跳過：跟英雄攻擊切入同一套（click、前 600ms 防誤觸）
         tapTarget: stage,
         onPlay: () => {
+          releaseArrivalPrefetch();
           // 第一幀＝降臨重音
           audioCue("boss.enter", { group: "presentation" });
           // 魔王走到鏡頭前才吼。影片 6.04s、吼聲 2.2s，3.4s 下去剛好收在片尾之前。
@@ -1831,6 +1929,8 @@
         },
       }
     );
+    // 實播元素已接手同一 URL，預抓副本立即釋放，重玩不累積解碼器與記憶體。
+    releaseArrivalPrefetch();
     stage.classList.remove("can-tap");
     // 影片比預期短（載不動、被跳過）時 roarTimer 還沒燒到，這裡補吼一聲 ——
     // 不補的話「魔王降臨卻完全沒聲音」會再發生一次。
@@ -1857,7 +1957,8 @@
 
     // === ACT 3B: 各角色的攻擊動畫一支接一支連播，中間不插打擊演出（避免割裂感） ===
     setAct("attack");
-    await playAttackSequence(players, attackSources);
+    await playAttackSequence(players, attackSources, { winnerId: wh?.id });
+    warmFateCircleAssets();
 
     // === ACT 4: retaliation and a full-frame smoke wipe. ===
     if (!state.skip) {
@@ -2154,6 +2255,11 @@
     const canvas = $("#scroll-canvas");
     const run = state.run;
     if (!canvas || !run) return;
+    // 720×1080 bitmap 約 3.1MB；只有玩家真的開啟卷軸時才配置，不佔首屏記憶體。
+    const exportWidth = Number(canvas.dataset.exportWidth) || 720;
+    const exportHeight = Number(canvas.dataset.exportHeight) || 1080;
+    if (canvas.width !== exportWidth) canvas.width = exportWidth;
+    if (canvas.height !== exportHeight) canvas.height = exportHeight;
     const ctx = canvas.getContext("2d");
     const W = canvas.width;
     const H = canvas.height;
@@ -2517,6 +2623,7 @@
   on($("#btn-skip"), "click", () => {
     if (!state.opts.allowSkip) return;
     state.skip = true;
+    window.dispatchEvent(new Event(PRESENTATION_SKIP_EVENT));
     window.HF_Audio?.stopGroup?.("presentation");
     window.HF_Audio?.stopGroup?.("hero-attack");
     window.HF_Audio?.stopGroup?.("hero-victory");

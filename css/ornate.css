@@ -1059,3 +1059,335 @@
   backdrop-filter: none;
   background: rgba(8, 3, 18, 0.86);
 }
+
+/* ── 行動效能裁切 + 平板版面 ───────────────────────────────────── */
+
+/**
+ * 戰鬥畫面本身已經有自己的滿版背景與遮罩；進入 play 時，body 上那兩張
+ * 固定式紋理只會多佔兩個全螢幕合成層，實際上完全看不到。
+ */
+body[data-screen="play"]::before,
+body[data-screen="play"]::after {
+  content: none;
+  display: none;
+}
+
+/**
+ * 角色攻擊切入 `.hero-cut` 是 `.stage-world` 外面的全螢幕兄弟層，顯示它時
+ * 不必繼續合成底下的影片、魔王、煙霧與粒子。`visibility` 會直接裁掉整棵
+ * 子樹，後面的 animation-play-state 則避免隱藏期間計時器仍持續喚醒合成器。
+ */
+.stage.cut-active .stage-world {
+  visibility: hidden;
+  animation: none !important;
+}
+.stage.cut-active .stage-world *,
+.stage.cut-active .stage-world *::before,
+.stage.cut-active .stage-world *::after {
+  animation-play-state: paused !important;
+}
+
+/**
+ * 舞台影片播放時只留影片本身與「點一下跳過」提示。`video-active` 由流程端
+ * 與 `.stage-video.show` 同步；這樣直式影片解碼時，不會同時合成藏在後方的
+ * 魔王 aura、英雄列、煙霧、牌陣與電影光效。
+ */
+.stage.video-active .stage-world > :not(.stage-video):not(.stage-tap-hint) {
+  visibility: hidden !important;
+}
+.stage.video-active .stage-world > :not(.stage-video):not(.stage-tap-hint),
+.stage.video-active .stage-world > :not(.stage-video):not(.stage-tap-hint) *,
+.stage.video-active .stage-world > :not(.stage-video):not(.stage-tap-hint) *::before,
+.stage.video-active .stage-world > :not(.stage-video):not(.stage-tap-hint) *::after {
+  animation-play-state: paused !important;
+}
+
+/* 影片已由素材端完成調色；不要在每一個解碼畫格上再套全螢幕 filter。 */
+.stage-video {
+  filter: none;
+}
+
+/* 永久 will-change 會讓 iOS 一直保留一張全螢幕 GPU texture。 */
+.stage-bg {
+  will-change: auto;
+}
+
+/**
+ * 煙霧保留原本的三層紫色漸層，只把逐格 blur/brightness 改成 GPU 友善的
+ * opacity + transform。非作用時用 visibility 真正停止繪製。
+ */
+.smoke {
+  visibility: hidden;
+  filter: none;
+  opacity: 0;
+  transform: translate3d(0, 0, 0) scale(1.02);
+  animation: none;
+  transition:
+    opacity 300ms ease,
+    transform 460ms ease,
+    visibility 0s linear 460ms;
+}
+.smoke.on {
+  visibility: visible;
+  filter: none;
+  animation: hf-smoke-composite 760ms ease-in-out infinite alternate;
+  transition: opacity 300ms ease, transform 460ms ease;
+}
+@keyframes hf-smoke-composite {
+  from {
+    opacity: 0.88;
+    transform: translate3d(-0.6%, 0, 0) scale(1.02);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0.6%, -0.35%, 0) scale(1.075);
+  }
+}
+
+/* 攻擊切入提示壓在動態影片上；實色深底與原畫面近似，但不用每格取樣模糊。 */
+.hero-cut .cut-tap-hint {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: rgba(8, 3, 18, 0.86);
+}
+
+/**
+ * 魔王光環只在魔王真的入鏡時運轉。`.down` 階段會刻意移除 `.show`，所以
+ * 也必須列為可見狀態；影片或攻擊切入蓋住舞台時則再次強制停播。
+ */
+.boss-aura {
+  visibility: hidden;
+  animation-play-state: paused;
+}
+.boss.show .boss-aura,
+.boss.enter .boss-aura,
+.boss.down .boss-aura {
+  visibility: visible;
+  animation-play-state: running;
+}
+.stage-video.show ~ .boss .boss-aura,
+.stage.video-active .boss-aura,
+.stage.cut-active .boss-aura {
+  visibility: hidden;
+  animation-play-state: paused !important;
+}
+
+/* 勝利片還沒出現時，不讓 grain 與 film 子樹留在合成清單裡。 */
+.victory-panel {
+  visibility: hidden;
+  transition: opacity 300ms ease, visibility 0s linear 300ms;
+}
+.victory-panel.show {
+  visibility: visible;
+  transition: opacity 300ms ease;
+}
+
+/* 手機的 grain 會對每一格勝利影片做 mix-blend；小畫面關掉幾乎看不出差異。 */
+@media (max-width: 699.98px) {
+  .film-grain {
+    display: none;
+  }
+}
+
+/**
+ * 700px 起視為平板／大折疊螢幕：外框放寬到 920px，但一般文字面板仍維持
+ * 舒適行寬。選角中段改成「左舞台、右側 4 欄英雄」；header/footer 繼續各佔
+ * 完整一列，因此直向與橫向都不會被兩欄擠壞。
+ */
+@media (min-width: 700px) {
+  #app {
+    width: min(100%, 920px);
+    max-width: 920px;
+  }
+
+  #screen-home .home-shell {
+    width: min(100%, 680px);
+    margin-inline: auto;
+  }
+  #screen-home .home-panel {
+    width: min(100%, 580px);
+    margin-inline: auto;
+  }
+
+  #screen-count .card.panel,
+  #screen-result .card.panel,
+  #modal-settings .card.panel,
+  #modal-stats .card.panel,
+  #modal-scroll .card.panel {
+    width: min(100%, 660px);
+    margin-inline: auto;
+  }
+  #screen-mode .card.panel {
+    width: min(100%, 760px);
+    margin-inline: auto;
+  }
+
+  #screen-pick {
+    padding:
+      calc(0.7rem + env(safe-area-inset-top, 0px))
+      max(0.9rem, env(safe-area-inset-right, 0px))
+      calc(0.7rem + env(safe-area-inset-bottom, 0px))
+      max(0.9rem, env(safe-area-inset-left, 0px));
+  }
+  #screen-pick .pick-arena {
+    width: min(100%, 892px);
+    margin-inline: auto;
+    gap: 0.48rem;
+  }
+  #screen-pick .pick-header,
+  #screen-pick .pick-footer {
+    width: 100%;
+    min-width: 0;
+  }
+  #screen-pick .pick-u {
+    grid-template-columns: minmax(0, 1.48fr) minmax(278px, 0.92fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: clamp(0.7rem, 1.7vw, 1.15rem);
+    min-height: 0;
+  }
+  #screen-pick .pick-stage-core,
+  #screen-pick .hero-grid {
+    min-width: 0;
+    min-height: 0;
+  }
+  #screen-pick .hero-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: repeat(4, minmax(0, auto));
+    align-content: center;
+    align-self: stretch;
+    gap: clamp(0.35rem, 0.8vw, 0.58rem);
+    padding: 0.25rem 0.08rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+  #screen-pick .hero-grid .hero-card {
+    min-width: 0;
+    padding: 0.2rem 0.14rem 0.24rem;
+  }
+  #screen-pick .hero-card .nm {
+    margin: 0.18rem -0.14rem -0.24rem;
+    padding-block: 0.2rem;
+    font-size: clamp(9px, 1.2vw, 11px);
+  }
+  #screen-pick .model-pedestal,
+  #screen-pick .sprite-stage,
+  #screen-pick :is(.vp-root, .vp-frame) {
+    min-height: 0;
+  }
+  #screen-pick .party-dots {
+    margin-top: 0.35rem;
+  }
+  #screen-pick .pick-actions {
+    max-width: 620px;
+    margin: 0.38rem auto 0;
+    flex-wrap: nowrap;
+  }
+  #screen-pick .pick-actions .btn {
+    min-width: 0;
+  }
+}
+
+/* 平板橫向／分割視窗偏矮時，收緊 header/footer，把高度完整留給角色舞台。 */
+@media (min-width: 700px) and (max-height: 720px) {
+  #screen-pick {
+    padding-top: calc(0.38rem + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(0.38rem + env(safe-area-inset-bottom, 0px));
+  }
+  #screen-pick .pick-arena {
+    gap: 0.26rem;
+  }
+  #screen-pick .pick-header {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.35rem 0.7rem;
+    text-align: left;
+  }
+  #screen-pick .pick-header-text {
+    justify-content: flex-start;
+    margin-top: 0;
+  }
+  #screen-pick .pick-header .flavor {
+    margin: 0;
+  }
+  #screen-pick .pick-status {
+    grid-column: 1 / -1;
+    margin-top: 0;
+    text-align: center;
+  }
+  #screen-pick .party-dots {
+    margin-top: 0.18rem;
+  }
+  #screen-pick .pick-actions {
+    margin-top: 0.22rem;
+  }
+  #screen-pick .pick-actions .btn {
+    min-height: 40px;
+    padding-block: 0.42rem;
+  }
+}
+
+/**
+ * 省流量／低記憶體／低核心裝置由 game.js 在 <html> 掛上 `.perf-lite`。
+ * 保留所有裝飾本體，只停掉長時間無限重繪；一次性的按鈕、翻牌、鎖角與
+ * 轉場仍照常播放，所以不會退回成沒有演出的靜態介面。
+ */
+html.perf-lite #screen-home .home-bg,
+html.perf-lite #screen-home .home-ambient i,
+html.perf-lite #screen-count .count-orbit i,
+html.perf-lite #screen-pick .pedestal-rune,
+html.perf-lite #screen-result::before,
+html.perf-lite #screen-result .result-rays,
+html.perf-lite #screen-result .result-model::before,
+html.perf-lite #screen-result .result-model::after,
+html.perf-lite .cine-runes,
+html.perf-lite .cine-speedlines,
+html.perf-lite .boss-aura,
+html.perf-lite .vf-rays,
+html.perf-lite .strike-gate.charging .fate-circle,
+html.perf-lite .build-update {
+  animation: none !important;
+}
+
+html.perf-lite .stage-bg {
+  transition-property: transform, opacity;
+}
+
+html.perf-lite .smoke.on {
+  opacity: 0.94;
+  transform: translate3d(0, 0, 0) scale(1.055);
+  animation: none;
+}
+
+html.perf-lite .fx-particles i:nth-child(n + 9) {
+  display: none;
+}
+
+html.perf-lite .film-grain {
+  display: none;
+}
+
+/* 低階裝置仍保留金環與印記，但全螢幕 veil 不再逐格計算 circle clip-path。 */
+html.perf-lite .scene-transition.is-playing {
+  animation-name: hf-scene-veil-lite;
+}
+@keyframes hf-scene-veil-lite {
+  0% { opacity: 0; }
+  28%, 56% { opacity: 0.9; }
+  100% { opacity: 0; }
+}
+
+/* 光環與印記已提供華麗感；全螢幕遮罩本身只淡入淡出，避免逐格重算 clip-path。 */
+@keyframes hf-scene-veil {
+  0% { opacity: 0; }
+  24% { opacity: 0.92; }
+  52% { opacity: 0.72; }
+  100% { opacity: 0; }
+}
+
+/* 結果面板已有 `.result-rays`，停掉背後第二套相同的全螢幕旋轉光芒。 */
+#screen-result::before {
+  content: none;
+  animation: none;
+}

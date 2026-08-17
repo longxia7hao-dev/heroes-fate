@@ -158,6 +158,29 @@ window.HF_Audio = (() => {
   const bufferCache = new Map();
   const activeGroups = new Map();
   const cooldowns = new Map();
+  let corePreloadPromise = null;
+  let corePreloadDone = false;
+  let corePreloadTimer = 0;
+  let heroPreloadToken = 0;
+
+  function idleTurn(timeout = 420) {
+    return new Promise((resolve) => {
+      if (typeof window.requestIdleCallback === "function") {
+        window.requestIdleCallback(() => resolve(), { timeout });
+      } else {
+        setTimeout(resolve, Math.min(120, timeout));
+      }
+    });
+  }
+
+  function scheduleCorePreload() {
+    if (corePreloadDone || corePreloadPromise || corePreloadTimer) return;
+    // 先讓眼前的 BGM / 點擊 cue 取得連線，核心音效稍後再一顆一顆暖。
+    corePreloadTimer = setTimeout(() => {
+      corePreloadTimer = 0;
+      preloadCore();
+    }, 520);
+  }
 
   function loadSettings() {
     try {
@@ -494,8 +517,8 @@ window.HF_Audio = (() => {
     if (ctx.state === "running") {
       unlocked = true;
       lastError = null;
-      preloadCore();
       crossfadeMusic(desiredMusic || sceneMusic[currentScene] || "home", !currentVoice);
+      scheduleCorePreload();
       notifyState();
       return Promise.resolve(true);
     }
@@ -506,8 +529,8 @@ window.HF_Audio = (() => {
         unlocked = running;
         if (running) {
           lastError = null;
-          preloadCore();
           crossfadeMusic(desiredMusic || sceneMusic[currentScene] || "home", !currentVoice);
+          scheduleCorePreload();
         }
         notifyState();
         return running;
@@ -577,15 +600,36 @@ window.HF_Audio = (() => {
     });
   }
 
-  function preloadHeroes(heroIds = []) {
-    [...new Set(heroIds.filter(Boolean))].forEach((heroId) => {
-      fetchRaw(asset(`assets/audio/heroes/attack/${heroId}.mp3`)).catch(() => {});
-      fetchRaw(asset(`assets/audio/heroes/victory/${heroId}.mp3`)).catch(() => {});
-    });
+  function preloadHeroes(heroIds = [], options = {}) {
+    const token = ++heroPreloadToken;
+    const unique = [...new Set(heroIds.filter(Boolean))];
+    const urls = [];
+    if (options.attacks !== false) {
+      unique.forEach((heroId) => urls.push(asset(`assets/audio/heroes/attack/${heroId}.mp3`)));
+    }
+    const victoryIds = options.winnerId
+      ? [options.winnerId]
+      : options.victories === false
+        ? []
+        : unique;
+    [...new Set(victoryIds.filter(Boolean))]
+      .forEach((heroId) => urls.push(asset(`assets/audio/heroes/victory/${heroId}.mp3`)));
+
+    // 原本最多 26 個 request 同時衝出去；現在低優先、可取消、逐檔載入。
+    (async () => {
+      for (const url of urls) {
+        if (token !== heroPreloadToken || !settings.enabled) return;
+        await idleTurn(360);
+        if (token !== heroPreloadToken || !settings.enabled) return;
+        try { await fetchRaw(url); } catch (_) {}
+      }
+    })();
   }
 
   function preloadCore() {
-    [
+    if (corePreloadDone) return Promise.resolve();
+    if (corePreloadPromise) return corePreloadPromise;
+    const urls = [
       sfx.ui_click,
       sfx.ui_lock,
       sfx.ui_whoosh,
@@ -597,10 +641,20 @@ window.HF_Audio = (() => {
       sfx.boss_defeat,
       sfx.smoke_burst,
       sfx.victory_fanfare,
-    ].forEach((url) => {
-      const load = context ? getBuffer(url) : fetchRaw(url);
-      load.catch(() => {});
+    ];
+    corePreloadPromise = (async () => {
+      for (const url of urls) {
+        if (!settings.enabled) return;
+        await idleTurn();
+        try {
+          await (context ? getBuffer(url) : fetchRaw(url));
+        } catch (_) {}
+      }
+      corePreloadDone = true;
+    })().finally(() => {
+      corePreloadPromise = null;
     });
+    return corePreloadPromise;
   }
 
   function getSettings() {
@@ -644,10 +698,6 @@ window.HF_Audio = (() => {
   document.addEventListener("click", gestureUnlock, { capture: true, passive: true });
   document.addEventListener("keydown", gestureUnlock, { capture: true });
   document.addEventListener("visibilitychange", handleVisibility);
-  const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1400));
-  idle(() => {
-    if (settings.enabled) preloadCore();
-  });
 
   return {
     cue,

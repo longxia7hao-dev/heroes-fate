@@ -6,8 +6,8 @@
 
 ## 目前狀態
 
-- 最後更新：2026-08-14（Claude Code）
-- 進度：可玩 **v1.46**（v1.9 的 3 支修正影片＋7 個角色改名＋確定動畫可點擊跳過＋展翼版魔王立繪 `boss_model_v3.png` 與新的魔王降臨影片）；14 角色影片（wait／confirm／attack／victory 各 14 支，CRF 29 共 26MB）；使用者製作的開始選單伴奏＋14 角選角專屬 BGM 精華、3 首原有場景 BGM、14 角各自攻擊／勝利音效、完整 UI／魔王聲效；角色卡切換會平滑換曲，首頁音效按鈕與設定圖示會依開關在 🔊／🔇 間同步切換；14 張選角卡完整排成 7×2
+- 最後更新：2026-08-17（Codex）
+- 進度：可玩 **v1.47**；手機維持 14 張選角卡 7×2，平板（≥700px）改為最大 920px 的直／橫向自適應版面，選角採左側 Sora 舞台＋右側 4 欄英雄；角色卡、玩家圓點、戰鬥 HUD 與分隊英雄節點改為持久 DOM 更新；選角與魔王戰媒體採有上限的序列預熱，低階／省流量裝置自動降載高成本裝飾；14 角色影片與角色 BGM／招式／勝利音效均完整保留
 - 路徑：`/Users/longxia7hao/Heroes_Fate/`
 - **開工必讀（會自動載入，跨裝置都有效）：`CLAUDE.md`**；架構長篇說明：`AGENT_HANDOFF.md`（內文現況數字是 2026-08-01 的舊值，只當背景讀）
 - **GitHub（2026-08-13 建立）**：`longxia7hao-dev/heroes-fate`（公開），版本控制 265 檔約 73MB；`assets/anim`（128MB）與舊高碼率原片 `assets/videos/{wait,confirm,victory}`（272MB）由 `.gitignore` 排除，只留本機與 Drive
@@ -17,20 +17,20 @@
 - 區網手機：`http://<Mac-IP>:8888/index.html`（勿用 127.0.0.1）
 - 公開隧道：見 `PHONE_ONLINE.txt`（需 cloudflared + server 同時開）
 - 影片主路徑：`assets/videos/mobile/{wait,confirm,attack,final,victory}/` 與 `mobile/boss/arrival.mp4` + `manifest.json`（Sora H.264 行動版）
-- 聲音主路徑：`assets/audio/{bgm,sfx,heroes/{bgm,attack,victory}}/`（61 支 MP3，共 4.13MB）；由 `js/audioDirector.js` 以 Web Audio 完整下載／解碼／循環，統一處理 iOS 解鎖重試、角色／場景淡入淡出、分組停止與音量控制
+- 聲音主路徑：`assets/audio/{bgm,sfx,heroes/{bgm,attack,victory}}/`（約 4.02MiB）；由 `js/audioDirector.js` 以 Web Audio 處理 iOS 解鎖、角色／場景淡入淡出、分組停止與音量控制；v1.47 起先啟動眼前 BGM／cue，再以 idle 序列暖核心音效，角色音效只序列暖參戰者 attack＋勝者 victory，不再同時發出最多 26 個請求
 - 公開網址（使用者角色 BGM 精華版）：`https://vocational-brush-org-exceptional.trycloudflare.com/index.html?build=character-bgm-20260811`
 - 素材來源（單一事實）：既有 13 位英雄來自 Google Drive `我的雲端硬碟/英雄命運抽（heroes fate)/角色圖/`（folder id `1EZhAFT1mTkOagNvm2iqkqDV3hIjAFfNd`）五個子夾；第 14 位龍騎士由 Codex 內建 ImageGen 產生一致角色關鍵畫面，再轉為現行手機影片、海報、頭像與專屬音效
 - 待選片：14 支全為約 3.04s 直式新片（**2026-08-12 全部換成使用者修正版**，720×~1270，CRF 29 共 5.8MB）
-- 攻擊魔王動畫：`assets/videos/mobile/attack/*.mp4`（14 支約 3.04s，CRF 29 共 8.1MB）— 魔王戰的英雄切入用這個，缺片才退回 confirm；開場會全部預抓
+- 攻擊魔王動畫：`assets/videos/mobile/attack/*.mp4`（14 支約 3.04s，CRF 29 共 8.1MB）— 魔王戰的英雄切入用這個，缺片才退回 confirm；v1.47 起只預熱下一支，背景 attack `<video>` 永遠最多 1 個，勝者 final 延到第一支攻擊交棒後才預熱
 - 選角卡縮圖：`assets/heroes/portraits/*.jpg`（14 張 240×322 頭像，共 188,335 bytes）；舊的 `assets/heroes/thumbs/` 已停用
 - 播放倍率：確定選擇片 **1× 原速**（3.00–3.04s 完整播完，硬上限 4200ms）；攻擊／勝利短片維持 **1.3×**（完整播完不截斷）
 - 魔王戰演出順序：集結→**魔王降臨影片（7s，缺片才退回立繪動畫）**→全軍突擊→**各角色攻擊切入連播**→魔王怒吼→**命運一擊（全員按住 3 秒）**→**勝者的打敗魔王專屬影片 final（1.3×，等待 8s／播放上限 14s）**→角色勝利短片→結果頁；**命運審判也會播 final**（只是收在「審判降下……」而非勝利片）；**攻擊輪播時點一下切入層可跳下一位（`click`＋前 600ms 防誤觸），不點則自然播完**；首幀 poster 見 `assets/videos/poster/{attack,victory,final}/` 與 `poster/boss/arrival.jpg`（43 張 1.3MB，2026-08-13 由現行影片全數重製）
-- 圖檔快取：立繪、選角頭像、所有 poster 一律帶 `?v=${ART_VERSION}`（現為 `2`）；換素材時**必須同步 +1**，否則手機會一直吃舊圖
+- 素材快取：`tools/gen_asset_versions.py` 會為影片、音檔、立繪、選角頭像與 poster 產生逐檔內容雜湊（`js/assetVersions.js`）；查不到才退回 `ART_VERSION=4`／全域媒體版本。換素材後必跑工具，不要回退成整包加版號
 - 設定生效時機：`命運卡`／`命運一擊`／懲罰題庫是在按設定視窗的**「關閉」**時才寫回 `state.opts`（`#settings-close` handler），不是勾選當下
 - 缺片狀態：**無**（wait／confirm／attack／final／victory 各 14 支；manifest 共 70 條引用）
 - 模式：**魔王討伐／命運排序／命運分隊(2-4)**（2026-08-15 依睿哥指示移除命運配對／命運審判／命運淘汰的卡片；**doom 的程式碼仍在**，因為命運卡「逆命」會把魔王討伐換成審判）；每局開場翻**命運卡**（4 張，可關；已移除「雙重命運」，一局只有一位勝利者）；揭曉前有**命運一擊**（可關）；結果頁可抽**懲罰任務**、看**今晚戰績**、產**命運卷軸**圖卡
-- 影片體積：`mobile/` 55MB（wait/confirm/attack/victory CRF 29 共 23MB＋final CRF 33 共 31MB＋boss/arrival 1.3MB）＋ `poster/` 1.3MB（43 張）；舊高碼率原始檔仍在 `assets/videos/{wait,confirm,victory}/`，不在現行 manifest 主路徑
-- 戰鬥素材：`assets/bg_battle_arena_v2.jpg` + `assets/boss_model_v2.png` + `assets/ref_battle_mobile.mp4`
+- 影片體積：`mobile/` 58.71MiB＋ `poster/` 1.59MiB；舊高碼率原始檔仍在 `assets/videos/{wait,confirm,victory}/`，不在現行 manifest 主路徑
+- 戰鬥素材：`assets/bg_battle_arena_v2.jpg` + 延遲載入的 `assets/boss_model_v3.{webp,png}` + `assets/ref_battle_mobile.mp4`；後者是遊戲實際只播的前 1.67s 手機版（125,278 bytes、無音軌、faststart），完整 9.93s 原片仍保留於本機忽略檔 `assets/ref_battle.mp4`
 - 角色選角 BGM：來源為 Google Drive `我的雲端硬碟/英雄命運抽（heroes fate)/伴奏/`；首頁 1 首＋角色 14 首皆由約 30.8s 原片擷取 12s 最強辨識段，輸出 44.1kHz stereo 96kbps、約 -14 LUFS、TP 不高於 -1.5dB，短淡入／淡出後循環；重建工具 `tools/extract_character_bgm.py`
 - 聲音來源：使用者製作的開始選單伴奏與 14 角選角 BGM 使用上述 Google Drive 來源；原有場景 BGM／UI／魔王共用聲效由 `tools/generate_audio.py` 原創程序化生成；既有 13 角攻擊與勝利音效由使用者 Google Drive 對應 Sora 原片抽出；龍騎士兩支專屬音效由專案既有原創 attack／chime 素材重新混音
 - GDD：`/Users/longxia7hao/Heroes_Fate_GDD/GDD.md`
@@ -43,6 +43,7 @@
 
 ## 變更日誌
 
+- 2026-08-17｜Codex｜**v1.47 架構／卡頓整體優化＋平板直橫向版面修正**：①**選角載入改為需求驅動**：刪除完整名冊 14 支 wait 的背景掃描（合計 5.44MiB），人數頁只暖 manifest＋14 張小頭像，不再任意抓騎士 wait/confirm 約 726KiB；卡片 `pointerdown` 改走 `HF_VideoPlayer.prime()` 的安全 standby 槽，不會暫停目前角色，`click` 仍只預覽，唯一寫入 `state.players[state.pickIndex]` 的地方維持 `applyPick()`（按「決定」）。②**DOM 不再反覆拆建**：14 張角色卡與玩家圓點初次建立後只切 class／disabled／內容；魔王戰 HUD 相同名冊只建立一次、逐位攻擊只更新 active/winner；分隊洗牌重用每個 slot 的節點，避免 13 人時重解碼頭像與大量 layout。③**魔王戰媒體有上限**：攻擊片由「所有參戰者＋final 同時 preload」改為目前播放時只暖下一支，背景 attack `<video>` 上限 1；final 延到第一位攻擊交棒後才暖；所有 prefetch 有 generation token，skip／cleanup 會中止並釋放 attack/final，poster 改為上限 6 的去重 Map，降臨預抓在實播第一幀就釋放。影片與招式聲都等 `play()` 真正成功後才揭幕／下 cue。④**音訊排程**：首次手勢優先啟動眼前 BGM，11 顆核心 SFX 改 idle 逐檔下載／解碼；參戰角色音訊由最多 26 個並發改為可取消的序列，只暖參戰者 attack＋勝者 victory。⑤**主執行緒／GPU 降載**：一般等待由逐幀 RAF 與 32ms polling 改成 timeout＋單一 skip event；全螢幕影片不再套 filter，影片／hero-cut 顯示時隱藏底下舞台合成樹；煙霧移除動態 blur、魔王 aura／勝利子樹只在可見時運作、轉場移除逐格 clip-path、結果頁只留一套旋轉光芒；省流量／2G／≤2GB／≤2 核裝置自動掛 `perf-lite`。⑥**平板修正**：≥700px 將 `#app` 由 480px 放寬到 920px；選角採左側 Sora 舞台＋右側 4 欄英雄，header/footer 跨滿整列，另有 ≤720px 高度橫向壓縮與 safe-area；一般面板維持 580–760px 適讀寬。⑦**首載延遲資源**：不可達公開模式的魔王立繪改到 survival 真要用時才設 src；勝者預設 279KB 騎士圖、兩張命運陣（134KB）與 720×1080 卷軸 canvas（約 3.1MB bitmap）均改為需要時才配置。⑧**修正式素材 404**：`assets/ref_battle_mobile.mp4` 正式納入版控；遊戲只播前 1.5s，因此輸出 1.67s／464×848／24fps／H.264／無音軌／faststart 的 125,278-byte 版本（原本 2,120,334 bytes，-94.1%），完整 9.93s 原片仍在本機忽略檔 `assets/ref_battle.mp4`。⑨清除 `css/game.css` 檔尾多餘 `}`；逐檔版本表共 216 條、雜湊 `c4935b4002`，快取：game.css?v=4、ornate.css?v=14、videoPlayer.js?v=29、audioDirector.js?v=19、game.js?v=72，印記 `v1.47 · 0817-1642`。⑩**驗證**：指定 `python3 -m http.server 8888 --bind 0.0.0.0` 下入口＋12 個關鍵資源全 200；14 英雄／70 manifest 影片與程式內 231 個靜態素材引用零缺檔；JS 語法、CSS/HTML 結構、125KB 影片完整解碼、300 次 RNG smoke 均通過；`js/rng.js` 未修改且 SHA-256 保持 `9ab55a96f19f162c1380a06cc7b3f2d496fb088aa393d570afeef7ef662f021a`，confirm 仍為 1×。
 - 2026-08-16｜Claude Code｜**v1.46 岩石巨獸換成直式版，拿掉 `contain` 的權宜作法**：①睿哥重做了一支 **1088×1920（直式 9:16）** 的岩石巨獸，取代原本 1728×1152 的橫式版。②原本那支是全場唯一的橫式素材，得靠 `fit: "contain"` 才不會被裁掉身體 —— 代價是上下兩條黑邊。**換成直式之後就跟另外兩隻一樣滿版**，那個權宜作法拿掉了。③`fit` 的機制**保留但目前沒人用**：註解已改寫成「下次再收到橫式素材時的後路」，免得後人以為是死碼順手刪掉。④壓成 720×1270／CRF 30：**1425KB（舊的橫式版是 573KB）** —— 直式的像素多了一倍多，體積跟著上去是正常的。三支降臨片合計約 4.3MB（第一次各自被抽到時才下載）。poster 一併重製。⑤快取：game.js?v=70→71、版本表 b2033a7e0a；印記 `v1.46`。⑥**實測**（固定抽中岩石巨獸）：`{act:arrival, src:arrival_golem.mp4, **fit:cover(預設)**, tap:true}`，預抓與實播一致，console error 0。
 - 2026-08-16｜Claude Code｜**v1.45 更新提示改成畫面最上方的整條橫幅**：①睿哥回「一樣都沒有改變，還是同一隻魔王」。查證：`af7caa2`（v1.44）**部署成功、線上 `build.txt` 就是 `v1.44 · 0816-1106`**，本機實測 7 局經「再來一局」重玩也確實在換魔王 —— **程式是對的，問題在他手機拿到的還是舊的 `index.html`**。②**這個坑已經吃掉四輪以上**（v1.11／v1.24／v1.25，加這次）。根因是提示長成「首頁最下面一顆小藥丸」，**要捲到底才看得到**，等於沒有用。改成 **`position: fixed` 的整條橫幅，固定在畫面最上方**、紫色呼吸動畫，不可能錯過。③**按鈕從首頁面板搬到 `<body>` 直屬層** —— 原本放在 `#screen-home` 裡，一切換頁面那個 section 就被隱藏，玩到一半根本看不到提示。現在每一頁都在。④**⚠️ 而且必須排在 `js/game.js` 之前**：`watchForNewBuild()` 在腳本載入當下就去 `$("#build-update")`，我第一次把它插在 `</body>` 前（腳本之後），那時還沒進 DOM、抓到 null 直接 return，**整個提示永遠不會出現**（量到 hidden 一直是 true）。⑤**順帶釐清一件事**（差點又講錯）：**魔王討伐全程不顯示魔王立繪** —— `presentBossRaid()` 裡沒有任何 `boss.classList.add("show")`（睿哥 2026-08-13 要求拿掉的），所以那一局唯一的魔王畫面就是 6 秒的降臨影片。我一度以為他看到的是不會變的立繪，還照著做了兩張去背立繪，查清楚後已全部還原、素材也刪掉，沒有留下沒人用的檔案。⑥快取：ornate.css?v=12→13；印記 `v1.45`。⑦**實測**（攔截 `build.txt` 回傳假版本）：首頁／人數頁／選角頁**三頁橫幅都在**、`position: fixed`、寬度滿版 393px、`top: 0`，點下去確實重新載入，console error 0。
 - 2026-08-15｜Claude Code｜**v1.44 修「魔王永遠不換」——抽籤掛錯地方了**：①睿哥：「測試了好幾輪，怎麼都沒有新增的魔物出現。」三選一跑好幾輪全中同一隻，機率上（(1/3)^n）說不通，一定是 bug。②**根因**：v1.42 把抽籤寫在 `prefetchArrivalClip()`，而它只掛在 `show("mode")`（進模式頁）上。但**「再來一局」`#btn-replay` 是直接呼叫 `startMode()`、根本不經過模式頁的** —— 於是重玩幾次都還是第一次抽到的那隻。睿哥就是用「再來一局」連續測，所以永遠看到同一隻。③**修法**：加一個 `arrivalUsed` 旗標。進模式頁照樣先抽（爭取預抓時間），`startMode()` 發現上一隻已經被用掉就**重抽**。這樣不管從模式頁進來還是「再來一局」，每一局都會重抽。④**驗證方法也修了**：前兩次探針都讀 `#stage-video.src`，一直讀到空字串 —— `playStageClip()` 會**先 `stopStageVideo()` 清掉 src 再設新的**，時機非常難抓。改用**網路請求**判定（每局要播哪一隻，一定會去要那一隻的 poster／mp4），一次就準。⑤**實測**：連續 7 局全部用「再來一局」重玩 → `ember → golem → ember → ember → ember → ember → golem`，**確實每局重抽**（修之前是 7 局同一隻）。快取：game.js?v=69→70；印記 `v1.44`。

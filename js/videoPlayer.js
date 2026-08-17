@@ -239,6 +239,26 @@ window.HF_VideoPlayer = (() => {
     }
 
     /**
+     * 使用者已按到某張卡時，只在「待命槽」暖該角色影片。
+     * 和 prepare() 不同，這條路徑絕不暫停目前正在播放的角色；手指滑開取消
+     * 也不會讓舞台閃空。真正的選擇與 currentId 仍只由 play() 改變。
+     */
+    async function prime(id, kind = "wait") {
+      if (destroyed || !id) return;
+      if (kind === "wait" && currentId === id) return;
+      const token = playToken;
+      await loadManifest();
+      if (destroyed || token !== playToken) return;
+      const target = standby && standby !== video ? standby : null;
+      const url = videoUrl(id, kind);
+      if (!target || !url) return;
+      setSource(target, versioned(url), {
+        loop: kind === "wait",
+        preload: "auto",
+      });
+    }
+
+    /**
      * 揭幕訊號：**只有影片真的開演**才 resolve(true)。
      * 睿哥指定「進入任何動畫前不要跑出角色的大頭圖案」，所以載入中不頂任何靜圖，
      * 舞台就維持空的召喚陣，等 `playing` 事件到了才揭開。
@@ -478,7 +498,7 @@ window.HF_VideoPlayer = (() => {
       root.remove();
     }
 
-    return { play, playOnce, prepare, pause, stop, destroy, el: root, setBadge };
+    return { play, playOnce, prepare, prime, pause, stop, destroy, el: root, setBadge };
   }
 
   return { create, loadManifest, videoUrl, versioned };
