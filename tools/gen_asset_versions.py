@@ -35,7 +35,8 @@ PATTERNS = [
     "assets/boss_model_v*.png",
     "assets/boss_model_v*.webp",
     "assets/bg_battle_arena_v2.jpg",
-    "assets/ref_battle_mobile.mp4",
+    # `assets/ref_battle_mobile.mp4` 於 2026-08-17 隨 ACT 3A「全軍突擊」一起移除
+    #（睿哥：「這個畫面不要了」）。檔案已刪，這裡不要再列。
 ]
 
 OUT_JS = ROOT / "js" / "assetVersions.js"

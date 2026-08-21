@@ -1962,14 +1962,24 @@
 
     const attackSources = await attackSourcesPromise;
 
-    // === ACT 3A: full-screen Sora battle reel. Always cleared in finally. ===
-    if (!state.skip) {
-      setAct("clash");
-      renderBattleHud(players);
-      setBanner("命運之輪 · 全軍突擊！");
-      audioCue("battle.clash", { group: "presentation" });
-      await playStageClip(video, "assets/ref_battle_mobile.mp4", 1500 * fast);
-    }
+    /**
+     * ⚠️ **ACT 3A「全軍突擊」已於 2026-08-17 移除，不要加回來。**
+     *
+     * 睿哥看了畫面直接說「這個畫面不要了，魔王降臨動畫後直接接英雄攻擊畫面」。
+     * 原本這裡會播 `assets/ref_battle_mobile.mp4`（全螢幕戰場空景）＋
+     * 「命運之輪 · 全軍突擊！」橫幅，夾在降臨與英雄切入中間。
+     *
+     * 一併清掉的東西，找不到時別以為是誰漏刪：
+     *   - `assets/ref_battle_mobile.mp4`（Codex 才在 v1.47 納入版控修 404，
+     *     現在沒人用了，照專案鐵則「只收實際在用的素材」刪掉。
+     *     要復原的話原片還在睿哥 Mac 的 `assets/ref_battle.mp4`，那支是 .gitignore 的）
+     *   - `revamp.css` 的 `[data-act="clash"]` 幾條規則變成死規則，**先留著**：
+     *     `clash` 這個 act 名稱沒別人用，留著不影響任何畫面，
+     *     真要清也該連同 `audioDirector.js` 的 `battle.clash` 一起，另外開一次。
+     *
+     * HUD 不必在這裡補建 —— ACT 2 的 `renderBattleHud(players)` 已經建好，
+     * `playAttackSequence()` 每一位攻擊時還會再更新 active。
+     */
 
     // === ACT 3B: 各角色的攻擊動畫一支接一支連播，中間不插打擊演出（避免割裂感） ===
     setAct("attack");

@@ -215,6 +215,5 @@ window.HF_ASSET_V = {
 "assets/boss_model_v2.png":"13acf17176",
 "assets/boss_model_v3.png":"c0c3a251a0",
 "assets/boss_model_v3.webp":"56887d24c5",
-"assets/bg_battle_arena_v2.jpg":"177525d735",
-"assets/ref_battle_mobile.mp4":"e3c12953ad"
+"assets/bg_battle_arena_v2.jpg":"177525d735"
 };
