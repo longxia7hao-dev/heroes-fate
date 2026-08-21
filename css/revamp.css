@@ -2255,6 +2255,44 @@ body::after {
 .fc-rune[data-rune="2"] { opacity: clamp(0, calc((var(--p, 0) - 0.68) * 18), 1); }
 /* 第四個要在 3 秒到之前就全亮 —— 四個都亮了才揭曉最後一擊的獲勝者 */
 .fc-rune[data-rune="3"] { opacity: clamp(0, calc((var(--p, 0) - 0.90) * 18), 1); }
+
+/**
+ * 中央六芒星（睿哥 2026-08-17：「中心的六芒星要一樣的跟著越來越亮，最後整個發光」）。
+ *
+ * 手法跟四個符文完全一樣 —— **同一張亮版圖、同一個框，只是遮罩換成中央那顆星**，
+ * 所以位置一定對得上，也不必另外切圖。
+ *
+ * 遮罩的尺寸是量出來的，不是猜的：把亮版圖的「金色程度」
+ *（`R*0.6 + G*0.4 - B`）取出來，中央那團金色的 99 百分位半徑是 **17.5%**，
+ * 中心在 **50% / 49.2%**（略高於幾何中心）。所以實心畫到 16.7%
+ *（22% × 76%）剛好包住星體，再羽化到 22% 讓光暈自然散出去。
+ * ⚠️ 量完有把偵測結果塗紅疊回原圖確認過 —— 這個專案吃過「以為量到瞳孔、
+ * 其實量到眉毛」的虧，凡是自動量出來的座標都要畫出來看過再用。
+ *
+ * 亮度是**四階**，門檻跟四個符文一模一樣：每亮一顆符文，星就亮一階
+ *（0.22 → 0.44 → 0.66 → 1），第四顆亮完星就整個發光，正好接上揭曉。
+ * 用四個 clamp 相加而不是單一線性值，才會是「跟著符文一階一階」而不是平順淡入。
+ *
+ * 光暈的模糊半徑刻意**寫死**、不跟著 `--p` 變：blur 半徑每幀改變會逼著
+ * 瀏覽器每幀重新柵格化，那正是 v1.43 掉幀的成因。強弱交給 opacity 就夠了。
+ */
+.fc-star {
+  position: absolute;
+  inset: 0;
+  background-image: url("../assets/deco/fate_circle_lit.webp?v=1");
+  background-size: 100% 100%;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  -webkit-mask-image: radial-gradient(ellipse 22% 22% at 50% 49.2%, #000 76%, rgba(0, 0, 0, 0) 100%);
+  mask-image: radial-gradient(ellipse 22% 22% at 50% 49.2%, #000 76%, rgba(0, 0, 0, 0) 100%);
+  filter: drop-shadow(0 0 12px rgba(255, 201, 96, 0.8));
+  opacity: calc(
+    clamp(0, calc((var(--p, 0) - 0.22) * 18), 1) * 0.22 +
+    clamp(0, calc((var(--p, 0) - 0.45) * 18), 1) * 0.22 +
+    clamp(0, calc((var(--p, 0) - 0.68) * 18), 1) * 0.22 +
+    clamp(0, calc((var(--p, 0) - 0.90) * 18), 1) * 0.34
+  );
+}
 .strike-gate.charging .fate-circle {
   animation: strike-pulse 620ms ease-in-out infinite alternate;
 }
