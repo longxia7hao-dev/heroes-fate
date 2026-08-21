@@ -1042,6 +1042,22 @@
       video.muted = true;
       video.playsInline = true;
       try { video.load(); } catch (_) {}
+      /**
+       * **就緒之前就先揭幕**，讓那段等待顯示的是 poster（影片首幀）而不是全黑。
+       *
+       * 睿哥回報「點『進入戰場』後約 4～5 秒全黑」—— 就是這一段：揭幕原本排在
+       * `waitMediaReady()` 之後，4G 上等 1.35MB 的降臨片要好幾秒，那幾秒舞台是
+       * 暗的、什麼都沒有，看起來像當掉。poster 跟影片同比例又是同一幀，先頂著
+       * 再無縫接上真正的播放，完全不突兀。
+       *
+       * 沒 poster 就不先揭幕 —— 那只是把黑畫面換個地方黑，沒有意義。
+       * 三條離開路徑（沒就緒、被略過、`play()` 失敗）都會走到 `finally` 的
+       * `stopStageVideo()`，那裡 `show` 與 `video-active` 都會收乾淨。
+       */
+      if (opts.poster) {
+        video.closest?.(".stage")?.classList.add("video-active");
+        video.classList.add("show");
+      }
       // 大支的全螢幕片（魔王降臨 1.35MB）在 4G 上 1 秒絕對載不完，
       // 就緒等待要能個別放寬，否則整段會被判定沒就緒而直接跳過。
       const ready = await waitMediaReady(video, opts.readyMs || 1000);

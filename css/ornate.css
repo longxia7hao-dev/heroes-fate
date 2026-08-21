@@ -547,8 +547,20 @@
  * 所以把各塊都收一點，最大的三塊是立繪框、命運卡說明框、三排按鈕。
  * `overflow-y: auto` 保留當保險，但正常情況不該被用到。
  */
+/**
+ * `overflow-x: hidden` 是修睿哥回報的「結果頁有一條水平捲動條」。
+ *
+ * 兇手是裝飾層 `.result-rays`（revamp.css:2126）：它 `position: absolute`、
+ * **`width: 150%`**，還一直在轉（`hf-result-rays` 24s）。轉到 45° 附近時
+ * 外接矩形更寬，於是把面板撐出一條金色的水平捲動條。面板本來就只設了
+ * `overflow-y: auto`、沒管 x —— 而 `overflow-y` 一旦不是 `visible`，
+ * x 軸的 `visible` 會被瀏覽器改判成 `auto`，捲動條就跑出來了。
+ * 光芒是純裝飾，切掉超出的部分完全不影響觀感。
+ */
 #screen-result .result-panel {
   padding: 0.8rem 0.9rem 0.75rem;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 #screen-result .result-model.has-video {
