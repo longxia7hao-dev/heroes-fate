@@ -778,11 +778,35 @@
  * 不用 CSS 的 `:has(.team-block)` 判斷，是因為排序模式的名單是一串 `<p>`／`<ol>`，
  * 沒有共通的標記可以選；由產生內容的那一端直接說「我是名單」最不容易錯。
  */
+/**
+ * 立繪改成「先吃滿剩下的空間，不夠時才讓給名單」。
+ *
+ * 睿哥 2026-08-17 回報「照片太小了」：附圖是**兩個人**的命運排序，名單只有兩行，
+ * 底下空一大片，立繪卻還是被釘在 132px。原因是這裡本來寫死一個很小的高度 ——
+ * 那是照**最壞情況**（13 人 4 隊）算的，於是人少時白白浪費半個畫面。
+ *
+ * 改法：把 `flex-shrink` 打開（`flex: 0 1 auto`）並給一個大的預設高度。
+ * flex 的收縮**只有在裝不下時才會發生**，所以：
+ *   - 2～6 人：內容裝得下 → 完全不收 → 立繪拿到完整的 34dvh
+ *   - 13 人：裝不下 → 立繪先縮到 `min-height` 為止，名單再自己捲
+ * `min-height` 是地板，再擠也要看得到臉。
+ *
+ * ⚠️ 高度是主軸尺寸，所以**一律用 height 定尺寸、width 交給 aspect-ratio**
+ *（`:not(.has-video)` 原本是用 width 定的，那樣 flex 收縮吃不到，要改過來）。
+ */
+#screen-result .result-panel.result-list .result-model {
+  flex: 0 1 auto;
+}
 #screen-result .result-panel.result-list .result-model.has-video {
-  height: min(17dvh, 132px);
+  height: min(40dvh, 290px);
+  /* 地板取原本寫死的 132px —— 保證「再多人也不會比改版前更小」 */
+  min-height: 132px;
 }
 #screen-result .result-panel.result-list .result-model:not(.has-video) {
-  width: min(26dvh, 120px);
+  width: auto;
+  height: min(34dvh, 240px);
+  /* 同上：原本是 width:min(26dvh,120px) 的正方框，地板就取 120px */
+  min-height: 120px;
 }
 #screen-result .result-panel.result-list h2 {
   margin-top: 0.2rem;
@@ -816,6 +840,280 @@
 #screen-result .result-panel.result-list .rank-list li {
   margin: 0.05rem 0;
 }
+
+
+/* 命運卡說明框：三行字不需要那麼寬鬆的內距 */
+#screen-result .result-detail {
+  margin-top: 0.42rem;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+#screen-result .result-detail > * {
+  margin-block: 0.18rem;
+}
+
+#screen-result .row.wrap {
+  gap: 0.34rem;
+  margin-top: 0.5rem;
+}
+#screen-result .row.wrap .btn {
+  min-height: 40px;
+  padding: 0.46rem 0.4rem;
+}
+#screen-result #btn-replay {
+  min-height: 46px;
+  font-size: 0.94rem;
+}
+
+/* 更矮的機子（可見高度 600 上下）再收一次 */
+@media (max-height: 700px) {
+  #screen-result .result-model.has-video {
+    height: min(31dvh, 240px);
+  }
+  #screen-result .result-panel h2 {
+    font-size: 1.6rem;
+  }
+  #screen-result .result-detail {
+    font-size: 0.78rem;
+    line-height: 1.42;
+  }
+  #screen-result .row.wrap .btn {
+    min-height: 36px;
+  }
+  #screen-result #btn-replay {
+    min-height: 42px;
+  }
+  /* 600 高的機子還差幾個 px，內距與列距再各收一點 */
+  #screen-result .result-panel {
+    padding: 0.6rem 0.85rem 0.6rem;
+  }
+  #screen-result .row.wrap {
+    gap: 0.3rem;
+    margin-top: 0.38rem;
+  }
+  #screen-result .result-panel:has(#doom-box:not([hidden])) .result-model.has-video {
+    height: min(21dvh, 165px);
+  }
+}
+
+/**
+ * 抽了懲罰任務之後會多出 `.doom-box`，那塊在 393 寬約 90px，
+ * 於是又把面板撐爆。用 `:has()` 偵測它有沒有顯示出來，**把空間從立繪框拿回來**
+ * ——那是唯一可以縮又不影響資訊的區塊。
+ *
+ * `:has()` 是 iOS Safari 16.4 起支援；萬一更舊的機器不支援，這幾條不生效、
+ * 退回原本「面板內可捲」的行為，不會壞掉。
+ */
+#screen-result .result-panel:has(#doom-box:not([hidden])) .result-model.has-video {
+  height: min(24dvh, 190px);
+}
+#screen-result .result-panel:has(#doom-box:not([hidden])) .result-model:not(.has-video) {
+  width: min(34dvh, 150px);
+}
+#screen-result .result-panel:has(#doom-box:not([hidden])) .result-detail {
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+#screen-result .result-panel:has(#doom-box:not([hidden])) h2 {
+  font-size: 1.55rem;
+}
+#screen-result .doom-box {
+  margin: 0.4rem 0 0.1rem;
+  padding: 0.45rem 0.7rem;
+}
+#screen-result .doom-kicker {
+  margin-bottom: 0.12rem;
+}
+#screen-result .doom-text {
+  font-size: clamp(0.92rem, 4.1vw, 1.1rem);
+  line-height: 1.28;
+}
+
+/**
+ * 320 寬的老機（SE 一代）在 `max-width: 350px` 會把結果頁的按鈕排成兩欄，
+ * 多出一整列。那個寬度本來就擠，這裡再把各塊收一次。
+ */
+@media (max-width: 350px) {
+  #screen-result .result-model.has-video {
+    height: min(26dvh, 200px);
+  }
+  #screen-result .result-panel h2 {
+    font-size: 1.45rem;
+  }
+  #screen-result .result-detail {
+    font-size: 0.74rem;
+  }
+  #screen-result .row.wrap .btn {
+    min-height: 34px;
+    font-size: 0.74rem;
+  }
+  #screen-result .result-panel:has(#doom-box:not([hidden])) .result-model.has-video {
+    height: min(16dvh, 125px);
+  }
+  /**
+   * 320 寬 ＋ 兩欄按鈕（多一整列）真的擠不下時，讓**說明框自己捲**，
+   * 而不是整個面板捲 —— 立繪與按鈕永遠留在畫面上，那才是「不用滑」的重點。
+   */
+  #screen-result .result-detail {
+    max-height: 20dvh;
+    overflow-y: auto;
+  }
+}
+
+/**
+ * ⚠️ 這一段必須放在**整個檔案最後**。
+ * 上面那條無條件的 `:has()` 規則跟這裡同強度，同強度時**誰在後面誰贏** ——
+ * 我第一次把它寫進前面的 `@media` 區塊，結果被後面的無條件規則蓋掉，量出來完全沒變。
+ */
+@media (max-height: 700px) {
+  #screen-result .result-panel:has(#doom-box:not([hidden])) .result-model.has-video {
+    height: min(21dvh, 165px);
+  }
+}
+
+@media (max-width: 350px) {
+  /**
+   * revamp.css 在這個寬度把結果頁的按鈕改成兩欄，於是多出一整列 ——
+   * 量出來那一列要 203px，比立繪框還貴。320 寬的機子高度也只有 560，
+   * 與其縮立繪不如**維持三欄**，字小一點就好（標籤最長只有四個字）。
+   */
+  #screen-result .row.wrap {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  #screen-result .row.wrap .btn:last-child {
+    grid-column: auto;
+  }
+  #screen-result #btn-replay {
+    grid-column: 1 / -1;
+  }
+  #screen-result .result-detail {
+    max-height: 13dvh;
+  }
+  #screen-result .result-panel:has(#doom-box:not([hidden])) .result-detail {
+    max-height: 11dvh;
+  }
+  #screen-result .result-panel:has(#doom-box:not([hidden])) .result-model.has-video {
+    height: min(12dvh, 95px);
+  }
+  #screen-result .result-panel:has(#doom-box:not([hidden])) h2 {
+    margin-top: 0.1rem;
+    font-size: 1.3rem;
+  }
+  #screen-result .result-panel:has(#doom-box:not([hidden])) .result-hero {
+    font-size: 0.8rem;
+  }
+}
+
+/**
+ * 其他模式（分隊／排序）的結果頁也要一個螢幕裝得下。
+ *
+ * 單人勝利那版（v1.30）是把每一塊都收小；但分隊的名單長度會隨人數變
+ * （最多 13 人 4 隊），**再怎麼收都有裝不下的一天**，硬收只會讓少人數時醜。
+ *
+ * 所以改成**面板 flex 直排、只讓名單那塊伸縮**：其餘（徽章、立繪、名字、按鈕）
+ * 保持自然大小，名單吃掉剩下的空間，真的放不下才在名單自己裡面捲。
+ * 這樣「按鈕永遠看得到、不用滑整頁」對任何人數都成立。
+ *
+ * `min-height: 0` 不能省 —— flex 子項的 `min-height` 預設是 `auto`，
+ * 不歸零的話 `.result-detail` 根本不會縮，overflow 也就不會生效。
+ */
+#screen-result .result-panel {
+  display: flex;
+  flex-direction: column;
+}
+#screen-result .result-model,
+#screen-result .result-badge,
+#screen-result .result-panel h2,
+#screen-result .result-hero,
+#screen-result .doom-box,
+#screen-result .row.wrap {
+  flex: 0 0 auto;
+}
+#screen-result .result-detail {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/**
+ * 名單型的結果頁（分隊／排序／淘汰／配對）：主角是名單不是立繪，所以立繪讓位。
+ * 由 `setResultPortrait(id, { list: true })` 掛上 `.result-list`。
+ *
+ * 不用 CSS 的 `:has(.team-block)` 判斷，是因為排序模式的名單是一串 `<p>`／`<ol>`，
+ * 沒有共通的標記可以選；由產生內容的那一端直接說「我是名單」最不容易錯。
+ */
+/**
+ * 立繪改成「先吃滿剩下的空間，不夠時才讓給名單」。
+ *
+ * 睿哥 2026-08-17 回報「照片太小了」：附圖是**兩個人**的命運排序，名單只有兩行，
+ * 底下空一大片，立繪卻還是被釘在 132px。原因是這裡本來寫死一個很小的高度 ——
+ * 那是照**最壞情況**（13 人 4 隊）算的，於是人少時白白浪費半個畫面。
+ *
+ * 改法：把 `flex-shrink` 打開（`flex: 0 1 auto`）並給一個大的預設高度。
+ * flex 的收縮**只有在裝不下時才會發生**，所以：
+ *   - 2～6 人：內容裝得下 → 完全不收 → 立繪拿到完整的 34dvh
+ *   - 13 人：裝不下 → 立繪先縮到 `min-height` 為止，名單再自己捲
+ * `min-height` 是地板，再擠也要看得到臉。
+ *
+ * ⚠️ 高度是主軸尺寸，所以**一律用 height 定尺寸、width 交給 aspect-ratio**
+ *（`:not(.has-video)` 原本是用 width 定的，那樣 flex 收縮吃不到，要改過來）。
+ */
+#screen-result .result-panel.result-list .result-model {
+  flex: 0 1 auto;
+}
+#screen-result .result-panel.result-list .result-model.has-video {
+  height: min(40dvh, 290px);
+  /* 地板取原本寫死的 132px —— 保證「再多人也不會比改版前更小」 */
+  min-height: 132px;
+}
+#screen-result .result-panel.result-list .result-model:not(.has-video) {
+  width: auto;
+  height: min(34dvh, 240px);
+  /* 同上：原本是 width:min(26dvh,120px) 的正方框，地板就取 120px */
+  min-height: 120px;
+}
+#screen-result .result-panel.result-list h2 {
+  margin-top: 0.2rem;
+  font-size: 1.5rem;
+}
+#screen-result .result-panel.result-list .result-hero {
+  font-size: 0.85rem;
+}
+#screen-result .result-panel.result-list .result-detail {
+  padding: 0.4rem 0.5rem;
+}
+
+/* 名單模式下把每一塊再收緊：3 隊 3 人本來要 215px，收完約 175px，
+   常見人數（3–6 人）就完全不必捲；13 人那種仍會捲，那是本來就裝不下。 */
+#screen-result .result-panel.result-list .team-block {
+  margin: 0.28rem 0;
+  padding: 0.34rem 0.5rem;
+  border-radius: 10px;
+}
+#screen-result .result-panel.result-list .team-name {
+  margin-bottom: 0.1rem;
+  font-size: 0.86rem;
+}
+#screen-result .result-panel.result-list .team-list {
+  padding-left: 0.95rem;
+  font-size: 0.85rem;
+}
+#screen-result .result-panel.result-list .team-list li {
+  margin: 0.06rem 0;
+}
+#screen-result .result-panel.result-list .rank-list li {
+  margin: 0.05rem 0;
+}
+
+/**
+ * 💡 試過但**不要再試**：把長名單的列高收窄，想讓 13 人時多露幾列。
+ * 沒有用 —— 名單是 `flex: 0 1 auto`（只會縮、不會長），收窄擠出來的空間
+ * 全被立繪吃掉，看得到的列數一列都沒有變（393×660 實測仍是 5/13）。
+ * 真要多露幾列得讓名單 `flex-grow`，但那會反過來在人少時把立繪壓扁 ——
+ * 跟睿哥這次要的「照片大一點」正好相反，所以維持現狀：13 人就是會捲。
+ */
 
 /**
  * 模式頁：刪掉三個模式之後 393×660 已經一頁裝得下，但 360×600 還差約 90px。
