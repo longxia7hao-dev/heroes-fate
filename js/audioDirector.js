@@ -22,6 +22,10 @@ window.HF_Audio = (() => {
     home: asset("assets/audio/bgm/home_custom.mp3"),
     pick: asset("assets/audio/bgm/pick.mp3"),
     battle: asset("assets/audio/bgm/battle.mp3"),
+    // 命運排序抽牌演出專用（睿哥 2026-08-17 指定的管弦樂 "The Sigil Unbound"，
+    // 30.75s）。不在 sceneMusic 裡 —— 它是演出中途臨時蓋掉場景 BGM 的曲子，
+    // 由 playMusicTrack()／restoreSceneMusic() 這一對進出，見下面。
+    order: asset("assets/audio/bgm/order.mp3"),
   };
 
   /** 使用者製作的角色選擇曲精華；只在選角預覽時取代通用 pick BGM。 */
@@ -496,6 +500,29 @@ window.HF_Audio = (() => {
     if (currentScene === "pick") crossfadeMusic(sceneMusic.pick);
   }
 
+  /**
+   * 演出中途把場景 BGM 換成指定曲目；`restoreSceneMusic()` 換回來。
+   *
+   * 跟 `playHeroMusic()` 是同一個概念（暫時蓋掉場景曲），差別是**不綁死在
+   * 某個場景**：選角那組寫死 `currentScene !== "pick"` 就退出，演出中途要換
+   * 就得另外一對。目前只有命運排序的抽牌段在用。
+   *
+   * ⚠️ 一定要成對呼叫，而且 `restoreSceneMusic()` 要放在 `finally` ——
+   * 中途被略過或丟例外時沒換回來的話，接下來整局都會掛著抽牌的曲子。
+   *
+   * 曲子由 `crossfadeMusic()` 負責下載／解碼／循環／0.68s 交叉淡入，
+   * 這裡不用自己管；還沒下載完就先靜靜等著，不會卡住演出。
+   */
+  function playMusicTrack(key) {
+    if (!musicTracks[key]) return false;
+    crossfadeMusic(key);
+    return true;
+  }
+
+  function restoreSceneMusic() {
+    crossfadeMusic(sceneMusic[currentScene] || sceneMusic.home);
+  }
+
 
   function unlock() {
     const ctx = ensureContext();
@@ -708,7 +735,9 @@ window.HF_Audio = (() => {
     playHeroAttack,
     playHeroMusic,
     playHeroVictory,
+    playMusicTrack,
     preloadHeroes,
+    restoreSceneMusic,
     setEnabled,
     setScene,
     setVolumes,

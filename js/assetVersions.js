@@ -151,6 +151,7 @@ window.HF_ASSET_V = {
 "assets/heroes/portraits/ranger.jpg":"f10aef4e72",
 "assets/audio/bgm/battle.mp3":"712fbb782a",
 "assets/audio/bgm/home_custom.mp3":"10fb7ea41e",
+"assets/audio/bgm/order.mp3":"a44e859067",
 "assets/audio/bgm/pick.mp3":"781926ba6e",
 "assets/audio/heroes/attack/amazon.mp3":"f6c3cd1c52",
 "assets/audio/heroes/attack/archmage.mp3":"93a79f0cc1",

@@ -1719,6 +1719,18 @@
     boss.classList.remove("show");
     placeHeroes([]);
 
+    /**
+     * 抽牌整段換成睿哥指定的管弦樂（`assets/audio/bgm/order.mp3`）。
+     *
+     * **在開場影片之前就下**，理由有二：一是儀式從影片就開始了，音樂晚進來
+     * 會像配錯段；二是這支 431KB 在 4G 上要抓一下，早一點下才來得及在
+     * 牌陣出現前接上（`crossfadeMusic()` 自己會等下載解碼，不會卡住演出）。
+     *
+     * ⚠️ 換回場景 BGM 寫在最下面的 `finally`，**不要搬到別的地方** ——
+     * 中途被略過或丟例外時沒換回來的話，接下來整局都會掛著這首曲子。
+     */
+    window.HF_Audio?.playMusicTrack?.("order");
+
     // ── 開場影片（睿哥的素材，6.04s）。沒播成就直接進牌陣，流程不能卡。
     //    原片 1152×1728／24Mb/s／18MB，已壓成 720×1080 CRF 30（1.09MB）；
     //    音軌拿掉了 —— 舞台影片一律靜音播放（iOS 自動播放的硬性條件），留著只是負重。
@@ -1732,11 +1744,15 @@
       onPlay: () => audioCue("boss.enter", { group: "presentation" }),
     });
     stage.classList.remove("dark");
-    if (!wrap) return;
 
-    // 整段包在 try/finally 裡 —— 跳過或中途出錯時牌陣一定要收掉，
-    // 不然會一直卡在畫面上。
+    // 整段包在 try/finally 裡 —— 跳過或中途出錯時牌陣一定要收掉、BGM 一定要換回來，
+    // 不然牌會卡在畫面上、曲子會一路掛到下一段。
+    //
+    // ⚠️ `if (!wrap) return` 原本排在 try 之前，現在**必須留在 try 裡面** ——
+    // 排在外面的話那條路徑會跳過 finally，音樂就換不回來了。
     try {
+      if (!wrap) return;
+
       // ── 發牌：全部卡背朝上
       setAct("cards");
       setBanner("命運之牌 · 由左至右決定順位");
@@ -1783,9 +1799,12 @@
         await wait(1500 * fast);
       }
     } finally {
-      wrap.setAttribute("aria-hidden", "true");
-      wrap.innerHTML = "";
-      wrap.style.removeProperty("--rk-n");
+      // wrap 可能是 null（上面那條 early return 的情況），一律用 optional chaining
+      wrap?.setAttribute("aria-hidden", "true");
+      if (wrap) wrap.innerHTML = "";
+      wrap?.style.removeProperty("--rk-n");
+      // 抽牌的曲子只屬於這一段，收工換回場景 BGM
+      window.HF_Audio?.restoreSceneMusic?.();
     }
   }
 

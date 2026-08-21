@@ -7,7 +7,7 @@
 ## 目前狀態
 
 - 最後更新：2026-08-17（Claude Code）
-- 進度：可玩 **v1.49**；手機維持 14 張選角卡 7×2，平板（≥700px）改為最大 920px 的直／橫向自適應版面，選角採左側 Sora 舞台＋右側 4 欄英雄；角色卡、玩家圓點、戰鬥 HUD 與分隊英雄節點改為持久 DOM 更新；選角與魔王戰媒體採有上限的序列預熱，低階／省流量裝置自動降載高成本裝飾；14 角色影片與角色 BGM／招式／勝利音效均完整保留
+- 進度：可玩 **v1.50**；手機維持 14 張選角卡 7×2，平板（≥700px）改為最大 920px 的直／橫向自適應版面，選角採左側 Sora 舞台＋右側 4 欄英雄；角色卡、玩家圓點、戰鬥 HUD 與分隊英雄節點改為持久 DOM 更新；選角與魔王戰媒體採有上限的序列預熱，低階／省流量裝置自動降載高成本裝飾；14 角色影片與角色 BGM／招式／勝利音效均完整保留
 - 路徑：`/Users/longxia7hao/Heroes_Fate/`
 - **開工必讀（會自動載入，跨裝置都有效）：`CLAUDE.md`**；架構長篇說明：`AGENT_HANDOFF.md`（內文現況數字是 2026-08-01 的舊值，只當背景讀）
 - **GitHub（2026-08-13 建立）**：`longxia7hao-dev/heroes-fate`（公開），版本控制 265 檔約 73MB；`assets/anim`（128MB）與舊高碼率原片 `assets/videos/{wait,confirm,victory}`（272MB）由 `.gitignore` 排除，只留本機與 Drive
@@ -17,7 +17,7 @@
 - 區網手機：`http://<Mac-IP>:8888/index.html`（勿用 127.0.0.1）
 - 公開隧道：見 `PHONE_ONLINE.txt`（需 cloudflared + server 同時開）
 - 影片主路徑：`assets/videos/mobile/{wait,confirm,attack,final,victory}/` 與 `mobile/boss/arrival.mp4` + `manifest.json`（Sora H.264 行動版）
-- 聲音主路徑：`assets/audio/{bgm,sfx,heroes/{bgm,attack,victory}}/`（約 4.02MiB）；由 `js/audioDirector.js` 以 Web Audio 處理 iOS 解鎖、角色／場景淡入淡出、分組停止與音量控制；v1.47 起先啟動眼前 BGM／cue，再以 idle 序列暖核心音效，角色音效只序列暖參戰者 attack＋勝者 victory，不再同時發出最多 26 個請求
+- 聲音主路徑：`assets/audio/{bgm,sfx,heroes/{bgm,attack,victory}}/`（約 4.44MiB，v1.50 新增抽牌曲 `bgm/order.mp3`）；由 `js/audioDirector.js` 以 Web Audio 處理 iOS 解鎖、角色／場景淡入淡出、分組停止與音量控制；v1.47 起先啟動眼前 BGM／cue，再以 idle 序列暖核心音效，角色音效只序列暖參戰者 attack＋勝者 victory，不再同時發出最多 26 個請求
 - 公開網址（使用者角色 BGM 精華版）：`https://vocational-brush-org-exceptional.trycloudflare.com/index.html?build=character-bgm-20260811`
 - 素材來源（單一事實）：既有 13 位英雄來自 Google Drive `我的雲端硬碟/英雄命運抽（heroes fate)/角色圖/`（folder id `1EZhAFT1mTkOagNvm2iqkqDV3hIjAFfNd`）五個子夾；第 14 位龍騎士由 Codex 內建 ImageGen 產生一致角色關鍵畫面，再轉為現行手機影片、海報、頭像與專屬音效
 - 待選片：14 支全為約 3.04s 直式新片（**2026-08-12 全部換成使用者修正版**，720×~1270，CRF 29 共 5.8MB）
@@ -42,6 +42,8 @@
 - 角色選擇要有建模立繪；不需要輸入名字
 
 ## 變更日誌
+
+- 2026-08-17｜Claude Code｜**v1.50 命運排序的抽牌演出換上專屬管弦樂**：①睿哥給了一支 Gemini 生成的影片（30.73s，內嵌標題 "The Sigil Unbound"／專輯 "Overture of the Lost Kingdom"／類型 Orchestral Film Score），指定「抽牌的動畫放這音樂」。只取音軌，存成 `assets/audio/bgm/order.mp3`。②**音量有對齊過，不是直接丟進去**：原素材 **-11.6 LUFS**，而現有的 `battle.mp3`／`pick.mp3` 是 **-15.2／-15.4** —— 直接用會比全場其他 BGM 大將近 4dB，一進抽牌段就突然變大聲。用兩段式 `loudnorm`（`linear=true`，先量測再套 `measured_*`）壓到 **-15.8 LUFS／真峰 -4.2dBTP**，跟 battle 差 0.6dB，聽不出來。編碼照現有 BGM 的規格：44.1kHz 立體聲 MP3 112kbps，431KB（battle 是 403KB）。③**新增一對 API `playMusicTrack(key)` / `restoreSceneMusic()`**（`js/audioDirector.js`）：概念跟 `playHeroMusic()` 一樣是「暫時蓋掉場景曲」，差別是**不綁死場景** —— 選角那組寫死 `currentScene !== "pick"` 就退出，演出中途要換得另外一對。下載／解碼／循環／0.68s 交叉淡入都由既有的 `crossfadeMusic()` 處理，沒有重造輪子。④**曲子在開場影片之前就下**：儀式從影片就開始了，音樂晚進來會像配錯段；而且這支 431KB 在 4G 上要抓一下，早一點下才來得及在牌陣出現前接上（`crossfadeMusic()` 會自己等，不會卡住演出）。⑤**⚠️ 改到流程結構，接手的人注意**：`presentOrderCards()` 原本有一行 `if (!wrap) return;` **排在 try 之前**，那條路徑會跳過 `finally` —— 音樂就換不回來、整局都會掛著抽牌的曲子。已經把它移進 try 裡面，`finally` 也改用 optional chaining（wrap 可能是 null）。換回場景 BGM 就寫在那個 `finally`，**不要搬走**。⑥快取：audioDirector.js?v=19→20、game.js?v=74→75、版本表 936f37fd6f；印記 `v1.50 · 0817-1858`。⑦**實測**（393×660 跑完整一局命運排序，每 100ms 取樣 `HF_Audio.getStatus().music`）：`… → battle → **order**（act=cards）→ home` —— **抽牌時確實換成 order 曲，結束後確實換回場景 BGM，沒有殘留**；`order.mp3` 回 200；API 兩支都掛得上去。
 
 - 2026-08-17｜Claude Code｜**v1.49 移除 ACT 3A「全軍突擊」，魔王降臨直接接英雄攻擊**：①睿哥看了畫面直接說「這個畫面不要了，魔王降臨動畫後直接接英雄攻擊畫面」。`presentBossRaid()` 的 ACT 3A 整段拿掉 —— 包含 `setAct("clash")`、「命運之輪 · 全軍突擊！」橫幅、`battle.clash` 音效，以及那支全螢幕戰場空景 `assets/ref_battle_mobile.mp4`。②**注意這裡的來龍去脈，免得後人以為誰刪錯**：那支影片是 **Codex 在 v1.47 才剛納入版控**（為了修 404），結果 v1.48 隔天睿哥就說這個畫面不要了 —— 於是照專案鐵則「版本控制只收遊戲實際在用的素材」把它刪掉，素材數 216→215、版本表雜湊回到 `b2033a7e0a`。**要復原的話原片還在睿哥 Mac 的 `assets/ref_battle.mp4`**（那支是 `.gitignore` 的）。③**HUD 不用補建**：ACT 3A 原本有一次 `renderBattleHud(players)`，但 ACT 2 已經建好、`playAttackSequence()` 每位攻擊時還會再更新 active，拿掉不影響。④**`revamp.css` 的 `[data-act="clash"]` 三條規則變成死規則，先留著沒清** —— `clash` 這個 act 名稱沒有別人在用，留著不影響任何畫面；真要清應該連 `audioDirector.js` 的 `battle.clash` 對應一起處理，另外開一次比較乾淨。⑤程式裡留了一段明確的「不要加回來」註解，寫清楚一併清掉了哪些東西，免得下一個人找不到 `ref_battle_mobile.mp4` 以為是漏刪。⑥快取：game.js?v=73→74、版本表 b2033a7e0a；印記 `v1.49 · 0817-1806`。⑦**實測**（393×660 跑完整一局，MutationObserver 同時記錄 `data-act` 與 `#cut-banner` 文字）：ACT 走 `gather → arrival → attack → fate → reveal → attack → …`（**中間沒有 clash**）；橫幅序列 `魔王降臨 → 玩家 1 出擊 → 玩家 2 → 玩家 3 → 魔王怒吼 → …`，**「全軍突擊」不再出現**；整局沒有任何 `ref_battle` 請求。⑧**驗證踩到的坑記一下**：`setBanner()` 寫的是 **`#cut-banner`**，不是 `#stage-banner` —— 第一次探針選錯元素，橫幅紀錄回傳空陣列，差點被當成「橫幅都沒出現」的通過。選錯選擇器的空結果跟真的通過長得一模一樣，這種檢查要先確認元素抓到了。
 
