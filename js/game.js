@@ -1525,15 +1525,36 @@
       } else if (mode === "survival") {
         await presentSurvival(players, result, { stage, bg, boss, spot, victory, fast });
       } else if (mode === "teams") {
-        setAct("pair");
         bg.style.backgroundImage = "url(assets/bg_party.jpg)";
         boss.classList.remove("show");
-        placeHeroes(players);
+        placeHeroes([]);
+
+        /**
+         * 開場影片（睿哥 2026-08-17 提供：一雙手把發光的金幣分成幾堆 ——
+         * 正好就是「分隊」的意象）。原片 640×1424／10.4Mb/s／13.3MB。
+         *
+         * **裁掉上方的空帘幕與下方的墨水瓶**（`crop=640:1136:0:288`）：原片非常瘦長
+         *（比例 0.449），直接讓舞台的 `cover` 去裁會把手跟金幣切掉；先裁成 0.563
+         * 再進來，`cover` 只需要再修掉上下各約 19px。壓成 CRF 30 共 1.54MB。
+         * 音軌拿掉了 —— 量到只有 -46.9 LUFS（等同無聲），留著純粹是負重，
+         * 而且舞台影片一律靜音播放（iOS 自動播放的硬性條件）。
+         *
+         * 這一段取代原本「英雄小圖洗牌 8 幀」的演出（睿哥：「動畫改成我提供」）。
+         */
+        setAct("arrival");
+        stage.classList.add("dark", "can-tap");
         setBanner("命運分隊 · 洗牌中……");
-        for (let k = 0; k < 8 && !state.skip; k++) {
-          placeHeroes(window.HF_RNG.shuffle(players, presentationRand));
-          await wait(100 * fast);
-        }
+        await playStageClip(video, "assets/videos/mobile/teams/intro.mp4", 11000 * fast, {
+          poster: artUrl("assets/videos/poster/teams/intro.jpg"),
+          readyMs: 8000,
+          untilEnded: true,
+          // 一鍵跳過：跟魔王降臨、英雄攻擊切入同一套手勢
+          tapTarget: stage,
+          onPlay: () => audioCue("team.shuffle", { group: "presentation" }),
+        });
+        stage.classList.remove("dark", "can-tap");
+
+        setAct("pair");
         for (let t = 0; t < result.teams.length && !state.skip; t++) {
           placeHeroes(result.teams[t]);
           setBanner(`${TEAM_LABELS[t] || `第 ${t + 1} 隊`} 成軍！`);
@@ -2102,7 +2123,24 @@
     const model = $("#result-model");
     const img = $("#result-img");
     const video = $("#result-video");
-    $("#screen-result .result-panel")?.classList.toggle("result-list", !!opts.list);
+    const panel = $("#screen-result .result-panel");
+    panel?.classList.toggle("result-list", !!opts.list);
+    /**
+     * `hidePortrait`：整塊立繪不要（目前只有分隊在用）。
+     * ⚠️ **一定要在這裡就 return**，不能只靠 CSS 藏 —— 後面那段會去載入並播放
+     * 勝利短片，藏起來也照載、照播，等於在 4G 上白白吃掉幾百 KB 與一個解碼器。
+     * 同時把 `token` 往前推，取消掉上一局可能還在跑的載入。
+     */
+    panel?.classList.toggle("result-no-portrait", !!opts.hidePortrait);
+    if (opts.hidePortrait) {
+      resultPortraitGen += 1;
+      model?.classList.remove("has-video");
+      if (video) {
+        try { video.pause(); video.removeAttribute("src"); video.load(); } catch (_) {}
+      }
+      if (img) img.removeAttribute("src");
+      return;
+    }
     if (img) img.src = heroImg(heroId);
     model?.classList.remove("has-video");
     if (!video || !window.HF_VideoPlayer) return;
@@ -2230,26 +2268,40 @@
     show("result");
   }
 
+  /**
+   * 分隊結果：用**角色大頭圖**直接把分配結果攤開（睿哥 2026-08-17：
+   * 「最後用角色大頭圖直覺的展現分配的結果」）。
+   *
+   * 原本是每隊一串文字 `<li>`，有兩個問題：
+   *   1. **看不完** —— 睿哥回報「3 隊」卻只看到兩隊，就是第三隊被捲出可視範圍了
+   *      （`.result-detail` 是會捲的）。文字列一人一行，4 隊 13 人要 17 行，一定爆。
+   *   2. 不直覺 —— 要讀完名字才知道誰跟誰同隊。
+   * 換成一隊一排頭像後，同樣的高度裝得下更多人，而且一眼就看得出隊形。
+   *
+   * **上方那張大立繪在這個模式關掉**：它本來顯示的是「第一隊第一個人」，
+   * 位置又長得跟魔王討伐的勝利者一樣，很容易被誤會成「這個人贏了」——
+   * 分隊根本沒有勝利者。關掉之後那塊空間全部讓給隊伍，剛好是睿哥要的重點。
+   */
   function showResultTeams(teams) {
     $("#result-badge").textContent = "🚩 命運分隊";
     $("#result-name").textContent = "分隊完成";
     $("#result-hero").textContent = `${teams.length} 隊`;
-    const first = teams[0]?.[0];
-    setResultPortrait(
-      first ? (first.hero || heroById(first.heroId)).id : "knight",
-      { list: true }
-    );
+    setResultPortrait(null, { list: true, hidePortrait: true });
     $("#result-detail").innerHTML = teams
       .map((team, t) => {
-        const members = team
+        const faces = team
           .map((p) => {
             const h = p.hero || heroById(p.heroId);
-            return `<li><b>${playerLabel(p.slot)}</b> · ${h.name}</li>`;
+            return `<div class="tm-chip">
+              <img class="tm-face" src="${heroThumb(h.id)}" alt="${h.name}"
+                   width="240" height="322" loading="eager" decoding="async" />
+              <span class="tm-tag">${playerLabel(p.slot)}</span>
+            </div>`;
           })
           .join("");
         return `<div class="team-block" style="--tc:${TEAM_COLORS[t] || "#7ef0ff"}">
           <p class="team-name">${TEAM_LABELS[t] || `第 ${t + 1} 隊`}<small>${team.length} 人</small></p>
-          <ul class="team-list">${members}</ul>
+          <div class="team-faces">${faces}</div>
         </div>`;
       })
       .join("");

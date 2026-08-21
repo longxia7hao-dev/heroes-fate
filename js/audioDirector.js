@@ -137,6 +137,8 @@ window.HF_Audio = (() => {
     "order.rank": ["ui_lock", 0.42, 1.04],
     "pair.reveal": ["reveal_chime", 0.68, 1.04],
     "team.reveal": ["ui_lock", 0.48, 0.95],
+    // 分隊開場影片（金幣分堆）起播時的一聲；影片本身無音軌
+    "team.shuffle": ["ui_whoosh", 0.6, 0.9],
     "victory.beat": ["ui_click", 0.34, 0.9],
     "victory.hit": ["wheel_hit", 0.5, 0.72],
     "victory.crown": ["victory_fanfare", 0.84, 1],

@@ -2369,6 +2369,61 @@ body::after {
   font-size: 0.9rem;
 }
 .team-list li { margin: 0.16rem 0; }
+
+/**
+ * 分隊結果的角色大頭圖（睿哥 2026-08-17：「用角色大頭圖直覺的展現分配的結果」）。
+ *
+ * 一隊一排，人多就換行（`flex-wrap`）。頭像外框吃該隊的顏色 `--tc`，
+ * 所以「誰跟誰同隊」不必讀字，看邊框顏色就知道。
+ *
+ * 尺寸用 `clamp` 跟著螢幕縮：360 寬的機子取下限 40px，大一點的機子到 52px。
+ * 頭像素材是 240×322 的直式，這裡切成正方形只留臉，所以 `object-fit: cover`
+ * ＋ `object-position: center 22%` —— 22% 是臉的位置（素材上緣到下巴約佔四成），
+ * 用預設的 center 會切到胸口。
+ */
+.team-faces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.45rem;
+}
+.tm-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  width: clamp(40px, 12vw, 52px);
+}
+.tm-face {
+  width: 100%;
+  /**
+   * ⚠️ `height: auto` **不能省**。`<img>` 上的 `width="240" height="322"` 屬性
+   * 會被瀏覽器當成「呈現層提示」寫進 UA 樣式（等同 `height: 322px`），
+   * 而它**贏過 `aspect-ratio`** —— 少了這一行，頭像會是 47×322 的長條，
+   * 四隊就把名單撐到 1500px。
+   * 這個提示不在 `document.styleSheets` 裡，所以逐條掃 CSS 規則**查不到兇手**，
+   * 只能從 computed height 與規則對不起來看出來。
+   */
+  height: auto;
+  aspect-ratio: 1;
+  border: 2px solid var(--tc, #7ef0ff);
+  border-radius: 10px;
+  background: #150a28;
+  object-fit: cover;
+  object-position: center 22%;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--tc, #7ef0ff) 45%, transparent);
+}
+.tm-tag {
+  color: #cfc4e6;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+/* 分隊沒有「勝利者」，上面那張大立繪關掉，空間全部讓給隊伍 */
+#screen-result .result-panel.result-no-portrait .result-model {
+  display: none;
+}
 .rank-out li span {
   display: inline-block;
   min-width: 1.4em;

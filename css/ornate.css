@@ -837,6 +837,57 @@
 #screen-result .result-panel.result-list .team-list li {
   margin: 0.06rem 0;
 }
+
+/**
+ * 分隊改用大頭圖之後，四隊還差約 80px 才塞得進一頁（睿哥特別要四隊的選項，
+ * 那就該四隊都看得到，不必捲）。收的是**間距與標籤**，頭像本身盡量不動 ——
+ * 頭像是這一頁的重點，縮它等於本末倒置。
+ */
+#screen-result .result-panel.result-list .team-block {
+  margin: 0.22rem 0;
+  padding: 0.3rem 0.45rem;
+}
+#screen-result .result-panel.result-list .team-faces {
+  gap: 0.28rem 0.34rem;
+}
+#screen-result .result-panel.result-list .tm-chip {
+  width: clamp(38px, 11.5vw, 50px);
+}
+#screen-result .result-panel.result-list .tm-tag {
+  font-size: 0.58rem;
+}
+
+/**
+ * 隊名從「頭像上面一行」改成「頭像左邊一欄」。
+ *
+ * 光收間距只省得到 11px，離四隊一頁還差 70px —— 因為真正貴的是**每一隊
+ * 都多佔一整行的隊名**（一行約 20px × 4 隊）。改成並排之後那四行就沒了，
+ * 四隊剛好一頁看完，也不必縮頭像（頭像是這頁的重點）。
+ *
+ * 隊名欄固定 3.5em：中文隊名最長是「第 4 隊」，加上人數小字剛好；
+ * 固定寬度才能讓四隊的頭像**左邊對齊**，一眼比得出各隊人數。
+ */
+#screen-result .result-panel.result-list .team-block {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+#screen-result .result-panel.result-list .team-name {
+  flex: 0 0 auto;
+  width: 3.5em;
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.15;
+}
+#screen-result .result-panel.result-list .team-name small {
+  display: block;
+  margin-left: 0;
+  font-size: 0.72em;
+}
+#screen-result .result-panel.result-list .team-faces {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 #screen-result .result-panel.result-list .rank-list li {
   margin: 0.05rem 0;
 }
