@@ -1499,7 +1499,21 @@
     );
 
     try {
+      /**
+       * **不是魔王戰就立刻把預抓的降臨片放掉。**
+       *
+       * 睿哥 2026-08-17 回報「影片超卡的，連選擇角色影片也跑不出來了」，
+       * 這是其中一個原因：`show("mode")` 會**投機預抓**一支 0.6–1.4MB 的魔王降臨片
+       *（見 `prefetchArrivalClip`），但原本要等整段演出跑完的 `finally` 才釋放。
+       * 於是玩命運分隊／命運排序時，那支**用不到**的降臨片會跟這個模式自己的
+       * 開場影片**同時搶頻寬**，4G 上兩邊都慢，開場片等不到就緒就被跳過。
+       *
+       * 放在 `revealFateCard()` 之後：命運卡有可能把 boss 換成 doom
+       *（`rng.js` 的「逆命」），那兩個模式都還要用降臨片，不能放掉。
+       * 判斷用 `result.mode` 不是 `mode` —— 前者才是命運卡生效後的真正模式。
+       */
       await revealFateCard(result.card, fast);
+      if (result.mode !== "boss" && result.mode !== "doom") releaseArrivalPrefetch();
       if (result.mode === "boss" || result.mode === "doom") {
         await presentBossRaid(players, result, { stage, bg, video, boss, smoke, spot, victory, cine, fast });
       } else if (mode === "order") {
