@@ -18,19 +18,20 @@
   </style>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&family=Noto+Serif+TC:wght@600;700;900&family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/game.css?v=4" />
-  <link rel="stylesheet" href="css/revamp.css?v=31" />
+  <link rel="stylesheet" href="css/revamp.css?v=38" />
   <!-- 介面提升層：疊在最後，專門處理 2026-08-14 視覺稿的金框／金屬按鈕語言。
        要退版把這一行拿掉即可，不影響 revamp.css。 -->
-  <link rel="stylesheet" href="css/ornate.css?v=18" />
+  <link rel="stylesheet" href="css/ornate.css?v=20" />
+  <link rel="stylesheet" href="css/aaa.css?v=19" />
 </head>
 <body>
   <div id="app">
     <section id="screen-boot" class="screen active">
       <div class="boot-stars" aria-hidden="true"></div>
       <div class="boot-inner">
-        <div class="boot-sigil" aria-hidden="true"><span>✦</span></div>
+        <div class="boot-sigil" aria-hidden="true"><img src="assets/favicon.svg" alt="" /></div>
         <p class="boot-sub">抽中的，不只是命運。</p>
         <h1 class="boot-logo">英雄命運</h1>
         <p class="boot-en">HEROES' FATE</p>
@@ -41,10 +42,18 @@
     <section id="screen-home" class="screen">
       <div class="home-bg"></div>
       <div class="home-ambient" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="aaa-dust" aria-hidden="true"></div>
+      <div class="aaa-frame" aria-hidden="true">
+        <i class="aaa-filigree nw"></i>
+        <i class="aaa-filigree ne"></i>
+        <i class="aaa-filigree sw"></i>
+        <i class="aaa-filigree se"></i>
+      </div>
       <div class="home-shell">
         <header class="home-brand">
-          <div class="home-crest" aria-hidden="true"><span>✦</span></div>
+          <div class="home-crest" aria-hidden="true"><img src="assets/favicon.svg" alt="" /></div>
           <p class="tag">HEROES' FATE</p>
+          <i class="aaa-rule" aria-hidden="true"></i>
           <h1><span>英雄</span><span>命運</span></h1>
           <p class="tagline">讓抽籤，成為值得歡呼的冒險</p>
         </header>
@@ -55,7 +64,9 @@
           </button>
           <button class="btn ghost home-settings" id="btn-settings">遊戲設定</button>
           <button class="audio-activate" id="audio-activate" type="button" aria-live="polite" aria-pressed="true">
-            <span class="audio-activate-icon" id="audio-activate-icon" aria-hidden="true">🔊</span>
+            <span class="audio-activate-icon" id="audio-activate-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 10v4h3l5 4V6L7 10H4z"/><path d="M16.2 8.8a4.2 4.2 0 0 1 0 6.4"/><path d="M18.4 6.4a7.2 7.2 0 0 1 0 11.2"/></svg>
+            </span>
             <span><b id="audio-activate-title">點一下開啟完整音效</b><small id="audio-activate-sub">背景音樂＋角色招式＋魔王怒吼</small></span>
           </button>
         </div>
@@ -65,12 +76,18 @@
           而且開著不重整就永遠不會重抓），所有 ?v= 都不會生效 ——
           那時這行會停在舊版本號，或整行不存在。**改版時記得改這裡。**
         -->
-        <p class="build-stamp" id="build-stamp">v1.55 · 0817-2358</p>
+        <p class="build-stamp" id="build-stamp">v1.56 · 0826-1909</p>
       </div>
     </section>
 
     <section id="screen-count" class="screen">
       <div class="screen-backdrop count-backdrop" aria-hidden="true"></div>
+      <div class="aaa-frame" aria-hidden="true">
+        <i class="aaa-filigree nw"></i>
+        <i class="aaa-filigree ne"></i>
+        <i class="aaa-filigree sw"></i>
+        <i class="aaa-filigree se"></i>
+      </div>
       <div class="card panel count-panel">
         <p class="step-kicker">STEP 01 · PARTY</p>
         <h2>編成冒險隊伍</h2>
@@ -107,10 +124,12 @@
         <!-- 動畫框在上、縮圖選單 7×2 在下 -->
         <div class="pick-u" aria-label="角色選擇版面">
           <div class="pick-stage-core">
-            <div class="model-pedestal">
-              <div class="pedestal-frame" aria-hidden="true"></div>
-              <div class="pedestal-rune" aria-hidden="true"></div>
-              <div id="sprite-stage" class="sprite-stage" aria-label="角色等待／確定動畫"></div>
+            <div class="model-pedestal is-empty" id="pick-pedestal">
+              <div class="pick-card" id="pick-card">
+                <img class="pick-face-back" id="pick-face-back" src="assets/ui/card_back.webp" alt="" />
+                <img class="pick-face-art" id="pick-face-art" alt="" hidden />
+                <div id="sprite-stage" class="sprite-stage" aria-label="角色等待／確定動畫"></div>
+              </div>
             </div>
           </div>
           <div id="hero-grid" class="hero-grid" aria-label="角色縮圖選單"></div>
@@ -129,6 +148,12 @@
 
     <section id="screen-mode" class="screen">
       <div class="screen-backdrop mode-backdrop" aria-hidden="true"></div>
+      <div class="aaa-frame" aria-hidden="true">
+        <i class="aaa-filigree nw"></i>
+        <i class="aaa-filigree ne"></i>
+        <i class="aaa-filigree sw"></i>
+        <i class="aaa-filigree se"></i>
+      </div>
       <div class="card panel wide mode-panel">
         <p class="step-kicker">STEP 03 · RITUAL</p>
         <h2>選擇命運儀式</h2>
@@ -262,7 +287,7 @@
       <div class="screen-backdrop result-backdrop" aria-hidden="true"></div>
       <div class="card panel result-panel">
         <div class="result-rays" aria-hidden="true"></div>
-        <div class="result-badge" id="result-badge">🏆 勝利者</div>
+        <div class="result-badge" id="result-badge">勝利者</div>
         <div class="result-model" id="result-model">
           <video id="result-video" playsinline webkit-playsinline muted loop preload="auto"></video>
           <img id="result-img" alt="" />
@@ -291,7 +316,7 @@
         <h2 id="settings-title">遊戲設定</h2>
         <label class="check"><input type="checkbox" id="opt-skip" checked /> 允許跳過演出</label>
         <label class="check"><input type="checkbox" id="opt-fast" /> 快速模式</label>
-        <label class="check"><input type="checkbox" id="opt-sound" checked /> <span id="opt-sound-icon" aria-hidden="true">🔊</span> <span>背景音樂與音效</span></label>
+        <label class="check"><input type="checkbox" id="opt-sound" checked /> <span id="opt-sound-icon" class="audio-activate-icon" aria-hidden="true"></span> <span>背景音樂與音效</span></label>
         <div class="audio-settings" id="audio-settings">
           <label for="opt-master"><span>總音量</span><output id="opt-master-value">86%</output></label>
           <input type="range" id="opt-master" min="0" max="100" value="86" />
@@ -354,12 +379,13 @@
   <button class="build-update" id="build-update" type="button" hidden>有新版本 · 點一下更新</button>
 
   <!-- 逐檔素材版本表：由 tools/gen_asset_versions.py 產生，必須排在其他腳本之前 -->
-  <script src="js/assetVersions.js?v=ab98391009"></script>
-  <script src="js/data.js?v=3"></script>
+
+  <script src="js/assetVersions.js?v=27"></script>
+  <script src="js/data.js?v=4"></script>
   <script src="js/rng.js?v=7"></script>
-  <script src="js/videoPlayer.js?v=29"></script>
+  <script src="js/videoPlayer.js?v=32"></script>
   <script src="js/audioDirector.js?v=21"></script>
   <script src="js/victoryFilm.js?v=12"></script>
-  <script src="js/game.js?v=78"></script>
+  <script src="js/game.js?v=34"></script>
 </body>
 </html>
