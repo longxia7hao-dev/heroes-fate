@@ -13,7 +13,7 @@ window.HF_DATA = {
       id: "paladin",
       name: "聖騎士",
       color: "#ffd54f",
-      weapon: "聖錘與盾",
+      weapon: "聖鎚與盾",
       flavor: "光與你同在。",
       victory: ["祈禱……", "聖光灌注！", "審判一擊！", "邪暗消散！", "VICTORY"],
     },
@@ -45,9 +45,9 @@ window.HF_DATA = {
       id: "amazon",
       name: "野蠻人",
       color: "#ff8a65",
-      weapon: "鏈錘",
+      weapon: "鏈鎚",
       flavor: "戰場，由我踩碎。",
-      victory: ["旋風起！", "鏈錘轟擊！", "地面碎裂！", "勝者宣言！", "VICTORY"],
+      victory: ["旋風起！", "鏈鎚轟擊！", "地面碎裂！", "勝者宣言！", "VICTORY"],
     },
     {
       id: "dark_fighter",
@@ -55,7 +55,7 @@ window.HF_DATA = {
       color: "#ef5350",
       weapon: "雙拳",
       flavor: "熱血——超載！",
-      victory: ["戰意爆發！", "連擊轟碎！", "火焰氣功！", "一擊粉碎！", "VICTORY"],
+      victory: ["戰意爆發！", "雙掌聚氣！", "真空波！", "一擊粉碎！", "VICTORY"],
     },
     {
       id: "assassin",
@@ -71,7 +71,7 @@ window.HF_DATA = {
       color: "#b39ddb",
       weapon: "紫晶法杖",
       flavor: "計算完畢，你輸了。",
-      victory: ["詠唱開始……", "奧術洪流！", "爆裂閃光！", "化為灰燼！", "VICTORY"],
+      victory: ["詠唱開始……", "奧術洪流！", "爆裂閃光！", "化為灰燬！", "VICTORY"],
     },
     {
       id: "dark_mage",
