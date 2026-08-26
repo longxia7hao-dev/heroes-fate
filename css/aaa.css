@@ -1,0 +1,655 @@
+/**
+ * aaa.css — 中古世紀紫金 3A 介面層。疊在 ornate.css 之後。
+ * 維持既有紫金語彙，加強石材、金飾、彩窗與金屬浮雕。
+ */
+
+:root {
+  --aaa-gold: #f3d48a;
+  --aaa-gold-hi: #fff4cf;
+  --aaa-gold-lo: #9a6b28;
+  --aaa-purple: #6b3ab8;
+  --aaa-purple-lo: #1a0a33;
+  --aaa-ink: #f7eec8;
+  --font-display: "Cinzel", "Noto Serif TC", "Noto Sans TC", serif;
+  --font-title: "Noto Serif TC", "Cinzel", "Noto Sans TC", serif;
+  --overlay-top: env(safe-area-inset-top, 0px);
+  --overlay-bottom: env(safe-area-inset-bottom, 0px);
+  --app-height: 100dvh;
+}
+
+html, body {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+#root,
+.hf-host,
+#hf-root {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+#app {
+  height: var(--app-height, 100%) !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  box-sizing: border-box;
+  padding-top: var(--overlay-top);
+  padding-bottom: var(--overlay-bottom);
+  overflow: hidden;
+}
+#app .screen {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  box-sizing: border-box;
+}
+#screen-pick {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  padding:
+    0.28rem
+    max(0.38rem, env(safe-area-inset-right, 0px))
+    0.28rem
+    max(0.38rem, env(safe-area-inset-left, 0px)) !important;
+}
+#screen-home .home-shell {
+  min-height: 0 !important;
+  height: 100%;
+  padding-top: 1rem !important;
+  padding-bottom: 0.85rem !important;
+}
+:is(#screen-count, #screen-mode, #screen-result) {
+  padding-top: 0.7rem !important;
+  padding-bottom: 0.7rem !important;
+}
+html.in-app-chrome #screen-pick .pick-header .flavor,
+html.in-app-chrome #screen-pick .pick-status {
+  display: none;
+}
+html.in-app-chrome #screen-pick .pick-header {
+  padding-top: 0.02rem;
+}
+html.in-app-chrome #screen-pick .pick-actions .btn {
+  min-height: 44px;
+}
+
+#screen-boot,
+#screen-home,
+#screen-count,
+#screen-mode,
+#screen-result {
+  position: relative;
+  contain: layout style;
+}
+
+#opt-sound-icon {
+  display: inline-flex;
+  width: 1.1rem;
+  height: 1.1rem;
+  color: var(--aaa-gold);
+  vertical-align: middle;
+}
+#opt-sound-icon svg { width: 100%; height: 100%; }
+
+#app {
+  background: #07030f;
+  box-shadow:
+    0 0 0 1px rgba(243, 212, 138, 0.22),
+    0 0 0 6px rgba(18, 6, 36, 0.9),
+    0 0 48px rgba(107, 58, 184, 0.28);
+}
+
+/* ── 共用飾框 ─────────────────────────────────────────── */
+
+.aaa-frame {
+  position: absolute;
+  inset: 0.32rem;
+  pointer-events: none;
+  z-index: 8;
+  border: 1px solid rgba(243, 212, 138, 0.28);
+  box-shadow:
+    inset 0 0 0 1px rgba(243, 212, 138, 0.08),
+    inset 0 0 48px rgba(90, 32, 150, 0.12);
+}
+
+.aaa-filigree {
+  position: absolute;
+  width: 78px;
+  height: 78px;
+  background: url("../assets/ui/frame_panel.webp") center / contain no-repeat;
+  mix-blend-mode: screen;
+  opacity: 0.82;
+  pointer-events: none;
+}
+.aaa-filigree.nw { top: -6px; left: -6px; }
+.aaa-filigree.ne { top: -6px; right: -6px; transform: scaleX(-1); }
+.aaa-filigree.sw { bottom: -6px; left: -6px; transform: scaleY(-1); }
+.aaa-filigree.se { bottom: -6px; right: -6px; transform: scale(-1); }
+
+.aaa-rule {
+  display: block;
+  width: min(68%, 220px);
+  height: 10px;
+  margin: 0.45rem auto 0.15rem;
+  background:
+    linear-gradient(90deg, transparent, rgba(243, 212, 138, 0.15) 12%, rgba(243, 212, 138, 0.9) 50%, rgba(243, 212, 138, 0.15) 88%, transparent);
+  clip-path: polygon(0 50%, 8% 0, 92% 0, 100% 50%, 92% 100%, 8% 100%);
+  opacity: 0.9;
+}
+
+.aaa-dust,
+.aaa-dust::before,
+.aaa-dust::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background-image:
+    radial-gradient(1.2px 1.2px at 18% 28%, rgba(255, 236, 190, 0.55), transparent 60%),
+    radial-gradient(1px 1px at 72% 18%, rgba(255, 220, 140, 0.4), transparent 60%),
+    radial-gradient(1.4px 1.4px at 42% 62%, rgba(214, 176, 255, 0.35), transparent 60%),
+    radial-gradient(1px 1px at 86% 74%, rgba(255, 236, 190, 0.45), transparent 60%);
+  animation: aaa-motes 18s linear infinite;
+}
+.aaa-dust::before { animation-duration: 26s; opacity: 0.7; }
+.aaa-dust::after { animation-duration: 34s; animation-direction: reverse; opacity: 0.5; }
+@keyframes aaa-motes {
+  from { transform: translate3d(0, 8px, 0); }
+  to { transform: translate3d(0, -18px, 0); }
+}
+
+/* ── 開機 ─────────────────────────────────────────────── */
+
+#screen-boot {
+  background:
+    linear-gradient(180deg, rgba(7, 3, 16, 0.28) 0%, rgba(7, 3, 16, 0.55) 70%, #07030f 100%),
+    url("../assets/bg_battle_arena_v2.jpg") center 40% / cover no-repeat,
+    #07030f;
+}
+#screen-boot .boot-stars { opacity: 0.35; }
+#screen-boot .boot-sigil {
+  width: 8.6rem;
+  height: 8.6rem;
+  border: 0;
+  border-radius: 0;
+  transform: none;
+  background: none;
+  box-shadow: none;
+  overflow: visible;
+  filter: drop-shadow(0 0 18px rgba(168, 85, 247, 0.55)) drop-shadow(0 0 28px rgba(255, 186, 70, 0.28));
+}
+#screen-boot .boot-sigil span { display: none; }
+#screen-boot .boot-sigil img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transform: none;
+}
+#screen-boot .boot-logo {
+  font-family: var(--font-title);
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  color: var(--aaa-gold-hi);
+  text-shadow:
+    0 2px 0 #6c341c,
+    0 0 22px rgba(255, 210, 110, 0.55),
+    0 0 48px rgba(140, 70, 220, 0.45);
+}
+#screen-boot .boot-en {
+  font-family: var(--font-display);
+  color: var(--aaa-gold);
+  letter-spacing: 0.42em;
+  font-weight: 600;
+}
+#screen-boot .boot-sub {
+  font-family: var(--font-title);
+  color: #e8d9b4;
+  letter-spacing: 0.28em;
+}
+#screen-boot .boot-bar {
+  height: 5px;
+  background: rgba(40, 18, 72, 0.85);
+  border: 1px solid rgba(243, 212, 138, 0.35);
+  border-radius: 0;
+  clip-path: polygon(4% 0, 96% 0, 100% 50%, 96% 100%, 4% 100%, 0 50%);
+}
+#screen-boot .boot-bar i {
+  background: linear-gradient(90deg, #6b3ab8, var(--aaa-gold), #fff4cf);
+}
+
+/* ── 主選單 ───────────────────────────────────────── */
+
+#screen-home .home-bg {
+  background:
+    linear-gradient(180deg, rgba(7, 3, 16, 0.18) 0%, rgba(7, 3, 16, 0.08) 28%, rgba(7, 3, 16, 0.72) 72%, #07030f 100%),
+    url("../assets/bg_battle_arena_v2.jpg") center 38% / cover no-repeat;
+  filter: saturate(1.08) contrast(1.06) brightness(0.92);
+}
+#screen-home::before {
+  background:
+    radial-gradient(ellipse at 50% 18%, rgba(168, 85, 247, 0.16), transparent 42%),
+    radial-gradient(ellipse at 50% 92%, rgba(255, 190, 85, 0.16), transparent 34%);
+}
+#screen-home::after {
+  border-color: rgba(243, 212, 138, 0.32);
+  box-shadow: inset 0 0 48px rgba(90, 32, 150, 0.18);
+}
+
+#screen-home .home-crest {
+  width: 8.2rem;
+  height: 8.2rem;
+  border: 0;
+  border-radius: 0;
+  transform: none;
+  overflow: visible;
+  background: none;
+  box-shadow: none;
+  filter: drop-shadow(0 0 16px rgba(168, 85, 247, 0.5)) drop-shadow(0 0 24px rgba(255, 186, 70, 0.22));
+}
+#screen-home .home-crest span { display: none; }
+#screen-home .home-crest img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transform: none;
+}
+
+#screen-home .home-brand .tag,
+#screen-home .tag {
+  font-family: var(--font-display);
+  color: var(--aaa-gold);
+  letter-spacing: 0.38em;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-shadow: 0 0 16px rgba(255, 210, 110, 0.45);
+}
+
+#screen-home .home-brand h1 {
+  font-family: var(--font-title);
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  color: var(--aaa-gold-hi);
+  text-shadow:
+    0 3px 0 #5a2a12,
+    0 0 18px rgba(255, 214, 120, 0.7),
+    0 0 42px rgba(140, 70, 220, 0.55);
+}
+
+#screen-home .home-brand .tagline {
+  font-family: var(--font-title);
+  color: #efe3c4;
+  letter-spacing: 0.14em;
+}
+
+#screen-home .home-eyebrow {
+  font-family: var(--font-display);
+  color: var(--aaa-gold);
+  letter-spacing: 0.22em;
+  font-weight: 600;
+}
+#screen-home .home-eyebrow span {
+  width: 28px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--aaa-gold));
+}
+#screen-home .home-eyebrow span:last-child {
+  background: linear-gradient(90deg, var(--aaa-gold), transparent);
+}
+
+#screen-home .home-start span {
+  font-family: var(--font-title);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+#screen-home .home-start small {
+  font-family: var(--font-display);
+  letter-spacing: 0.28em;
+}
+
+.build-stamp {
+  font-family: var(--font-display);
+  letter-spacing: 0.18em;
+  color: rgba(243, 212, 138, 0.45) !important;
+}
+
+/* ── 人數／儀式／結果 背景 ──────────────────────────── */
+
+#screen-count .count-backdrop {
+  background:
+    linear-gradient(180deg, rgba(8, 3, 18, 0.42), rgba(8, 3, 18, 0.78)),
+    url("../assets/bg_party.jpg") center 40% / cover no-repeat;
+}
+#screen-mode .mode-backdrop {
+  background:
+    linear-gradient(180deg, rgba(8, 3, 18, 0.38), rgba(8, 3, 18, 0.82)),
+    url("../assets/bg_boss.jpg") center 45% / cover no-repeat;
+}
+#screen-result .result-backdrop {
+  background:
+    linear-gradient(180deg, rgba(8, 3, 18, 0.28), rgba(8, 3, 18, 0.78)),
+    url("../assets/bg_battle_arena_v2.jpg") center 30% / cover no-repeat;
+}
+
+.step-kicker {
+  font-family: var(--font-display);
+  color: var(--aaa-gold) !important;
+  letter-spacing: 0.32em;
+  text-shadow: 0 0 12px rgba(255, 200, 96, 0.35);
+}
+
+#screen-count .card.panel h2,
+#screen-mode .card.panel h2,
+#screen-result .card.panel h2,
+#screen-result #result-name {
+  font-family: var(--font-title);
+  letter-spacing: 0.08em;
+}
+
+#screen-count .desc,
+#screen-mode .desc {
+  color: #d8c9a6;
+  font-family: var(--font-title);
+}
+
+#screen-count .count-num {
+  font-family: var(--font-display);
+}
+
+/* ── 選角殿堂 ─────────────────────────────────────────── */
+
+#screen-pick {
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  padding:
+    max(0.28rem, env(safe-area-inset-top, 0px))
+    max(0.38rem, env(safe-area-inset-right, 0px))
+    max(0.36rem, env(safe-area-inset-bottom, 0px))
+    max(0.38rem, env(safe-area-inset-left, 0px));
+  background:
+    radial-gradient(ellipse at 50% 38%, rgba(112, 50, 178, 0.14), transparent 52%),
+    linear-gradient(180deg, rgba(12, 5, 26, 0.22) 0%, rgba(8, 3, 16, 0.62) 100%),
+    url("../assets/bg_battle_arena_v2.jpg") center 30% / cover no-repeat,
+    #080313;
+}
+#screen-pick.active {
+  display: flex;
+  flex-direction: column;
+}
+#screen-pick .pick-arena {
+  flex: 1 1 0;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  gap: 0.14rem;
+  overflow: hidden;
+}
+#screen-pick .pick-header {
+  flex: 0 0 auto;
+  padding: 0.04rem 0.2rem 0.02rem;
+}
+#screen-pick .pick-header-text h2 {
+  font-size: 1.05rem;
+  letter-spacing: 0.08em;
+}
+#screen-pick .pick-header .flavor {
+  font-size: 0.64rem;
+}
+#screen-pick .pick-status {
+  margin-top: 0.08rem;
+  padding: 0.12rem 0.35rem;
+  font-size: 0.62rem;
+}
+#screen-pick .pick-u {
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) max-content;
+  gap: 0.14rem;
+  overflow: visible;
+}
+#screen-pick .pick-stage-core,
+#screen-pick .sprite-stage,
+#screen-pick :is(.vp-root, .vp-frame) {
+  min-height: 0 !important;
+  flex: 1 1 0;
+  height: 100%;
+  overflow: hidden;
+}
+#screen-pick .hero-grid {
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: visible;
+}
+#screen-pick .pick-footer {
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 8;
+  padding-bottom: 0.12rem;
+}
+#screen-pick .pick-actions .btn {
+  min-height: 44px;
+  font-size: 0.82rem;
+}
+#screen-pick .pick-stage-core {
+  display: grid !important;
+  place-items: center;
+  container-type: size;
+  min-height: 0 !important;
+  height: 100%;
+  overflow: visible;
+}
+#screen-pick .model-pedestal::before {
+  background-image: none !important;
+  content: none !important;
+}
+#screen-pick .model-pedestal::after {
+  display: none !important;
+}
+#screen-pick .model-pedestal {
+  width: min(100cqw, calc(100cqh * 2 / 3));
+  height: min(100cqh, calc(100cqw * 3 / 2));
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 2 / 3;
+  flex: 0 0 auto !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible !important;
+  perspective: 1400px;
+  perspective-origin: 50% 48%;
+  filter: none !important;
+}
+#screen-pick .model-pedestal.is-empty {
+  background: transparent !important;
+}
+#screen-pick .pick-card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #12081e;
+  transform: rotateY(0deg);
+  transform-origin: center center;
+  transition: transform 0.3s cubic-bezier(0.37, 0.02, 0.22, 1);
+  box-shadow:
+    0 18px 38px rgba(0, 0, 0, 0.55),
+    0 0 22px rgba(168, 85, 247, 0.22),
+    inset 0 0 0 1px rgba(255, 214, 140, 0.38);
+  will-change: transform;
+}
+#screen-pick .pick-card.is-out {
+  transform: rotateY(90deg);
+  transition-duration: 0.26s;
+  transition-timing-function: cubic-bezier(0.55, 0.06, 0.78, 0.22);
+}
+#screen-pick .pick-card.is-in-from {
+  transform: rotateY(-90deg);
+}
+#screen-pick .pick-card.no-anim {
+  transition: none !important;
+}
+#screen-pick .pick-face-back,
+#screen-pick .pick-face-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  pointer-events: none;
+  z-index: 1;
+}
+#screen-pick .pick-face-art[hidden],
+#screen-pick .pick-face-back[hidden] {
+  display: none !important;
+}
+#screen-pick .sprite-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  opacity: 0;
+  pointer-events: none;
+  border-radius: 14px;
+  overflow: hidden;
+  transition: opacity 0.2s linear;
+}
+#screen-pick .sprite-stage.is-live {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  #screen-pick .pick-card {
+    transition: none !important;
+  }
+}
+#screen-pick .slot-chip {
+  font-family: var(--font-display);
+  letter-spacing: 0.16em;
+  border-color: rgba(243, 212, 138, 0.7);
+  color: var(--aaa-gold-hi);
+  background: linear-gradient(180deg, rgba(48, 22, 88, 0.92), rgba(13, 7, 30, 0.94));
+  box-shadow: 0 0 16px rgba(168, 85, 247, 0.22);
+}
+#screen-pick .pick-header-text h2 {
+  font-family: var(--font-title);
+  letter-spacing: 0.1em;
+}
+
+@media (max-height: 780px) {
+  #screen-pick .pick-header .flavor,
+  #screen-pick .pick-status {
+    display: none;
+  }
+  #screen-pick .pick-header-text {
+    margin-top: 0.04rem;
+  }
+  #screen-pick .party-dots {
+    margin-top: 0.12rem;
+    padding-block: 0.08rem;
+  }
+  #screen-pick .pick-actions {
+    margin-top: 0.16rem;
+  }
+}
+
+/* ── 戰鬥 HUD ─────────────────────────────────────────── */
+
+.cut-banner {
+  font-family: var(--font-title);
+  border-radius: 0;
+  border: 1px solid rgba(243, 212, 138, 0.82);
+  background:
+    linear-gradient(90deg, rgba(14, 5, 28, 0.88), rgba(52, 22, 86, 0.94), rgba(14, 5, 28, 0.88));
+  box-shadow:
+    0 0 0 2px rgba(76, 30, 111, 0.7),
+    0 10px 30px rgba(0, 0, 0, 0.5),
+    0 0 22px rgba(255, 211, 112, 0.22);
+  clip-path: polygon(3% 0, 97% 0, 100% 50%, 97% 100%, 3% 100%, 0 50%);
+}
+.cut-banner::before,
+.cut-banner::after {
+  content: "✦";
+  color: var(--aaa-gold);
+}
+
+.battle-hud-badge {
+  box-shadow: 0 0 0 1px rgba(243, 212, 138, 0.55), 0 8px 18px rgba(0, 0, 0, 0.45);
+}
+
+.hero-cut-meta strong {
+  font-family: var(--font-title);
+  letter-spacing: 0.08em;
+}
+.hero-cut-count {
+  font-family: var(--font-display);
+  letter-spacing: 0.18em;
+}
+
+/* ── 模式卡／結果 ───────────────────────────────────── */
+
+#screen-mode .mode-card,
+#screen-mode .mode-card-teams {
+  border-color: rgba(243, 212, 138, 0.72);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 235, 190, 0.18),
+    0 8px 22px rgba(0, 0, 0, 0.45),
+    0 0 18px rgba(140, 70, 220, 0.16);
+}
+#screen-mode .m-kicker,
+#screen-mode .m-ico {
+  font-family: var(--font-display);
+  letter-spacing: 0.18em;
+}
+
+#screen-result .result-badge {
+  font-family: var(--font-display);
+  letter-spacing: 0.28em;
+  color: var(--aaa-gold-hi);
+  border: 1px solid rgba(243, 212, 138, 0.55);
+  background: linear-gradient(180deg, rgba(72, 36, 12, 0.55), rgba(28, 10, 48, 0.7));
+  padding: 0.28rem 0.8rem;
+}
+
+/* ── 設定／音效列 ───────────────────────────────────── */
+
+.audio-activate {
+  border-color: rgba(243, 212, 138, 0.28) !important;
+  background: linear-gradient(180deg, rgba(36, 16, 68, 0.55), rgba(12, 5, 28, 0.7)) !important;
+}
+.audio-activate-icon svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  color: var(--aaa-gold);
+}
+
+#modal-settings .card.panel h2,
+#modal-stats .card.panel h2 {
+  font-family: var(--font-title);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aaa-dust,
+  .aaa-dust::before,
+  .aaa-dust::after,
+  #screen-home .home-bg {
+    animation: none !important;
+  }
+}
+
+@media (pointer: coarse), (max-width: 720px) {
+  .aaa-dust,
+  .aaa-dust::before,
+  .aaa-dust::after {
+    animation: none !important;
+  }
+}
