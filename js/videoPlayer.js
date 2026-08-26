@@ -5,10 +5,10 @@
  * - victory: play once on win film
  */
 window.HF_VideoPlayer = (() => {
-  const MANIFEST_VERSION = "13";
-  const MEDIA_VERSION = "14";
+  const MANIFEST_VERSION = "14";
+  const MEDIA_VERSION = "27";
   /** 立繪／頭像／poster 的版本，必須與 game.js 的 ART_VERSION 一致 */
-  const ART_VERSION = "4";
+  const ART_VERSION = "6";
   /** 攻擊／勝利短片維持現有節奏；選角確定片必須以原始速度完整播放。 */
   const CLIP_RATE = 1.3;
   const CONFIRM_RATE = 1;
@@ -17,7 +17,7 @@ window.HF_VideoPlayer = (() => {
    * 這只是保險：慢速網路上 `video.play()` 的 promise 會一直 pending，
    * 沒有硬上限就會把呼叫端永遠掛住 —— 那正是「動畫從來沒出現」的原始 bug。
    */
-  const REVEAL_GIVEUP_MS = 15000;
+  const REVEAL_GIVEUP_MS = 8000;
   let manifest = null;
   let manifestPromise = null;
 
@@ -38,7 +38,7 @@ window.HF_VideoPlayer = (() => {
     return manifestPromise;
   }
 
-  function videoUrl(heroId, kind) {
+  function videoUrl(heroId, kind, bossId) {
     const m = manifest?.[heroId];
     if (!m) return null;
     if (kind === "victory") return m.victory || m.attack || m.confirm || m.wait || null;
@@ -297,22 +297,36 @@ window.HF_VideoPlayer = (() => {
 
       const url = videoUrl(id, playKind);
       if (!url) {
-        // 整支缺檔才走靜圖（正常情況 14 角都有片，這條是防呆）
         showStill(id);
         setBadge("");
         return reveal.done(true);
       }
 
       const src = versioned(url);
-      const target = video.dataset.src === src ? video : standby;
+
+      // 換角立刻收掉舊角色：寧可空一拍召喚陣，也不要停在上一位。
+      const alreadyThis = videos.some((v) => v.dataset.src === src && v.readyState >= 2);
+      if (!alreadyThis) {
+        videos.forEach((v) => {
+          if (v.dataset.src !== src) v.classList.remove("is-active");
+        });
+        try { opts.onHide?.(); } catch (_) {}
+      }
+
+      // iOS 同時只能播一支：先全部暫停，再決定用哪一個緩衝。
+      videos.forEach((v) => {
+        try { v.pause(); } catch (_) {}
+      });
+
+      let target = videos.find((v) => v.dataset.src === src)
+        || (standby && standby !== video ? standby : video)
+        || video;
       if (!target) {
         showStill(id);
         return reveal.done(true);
       }
       if (target.dataset.src !== src) {
         setSource(target, src, { loop: playKind === "wait", preload: "auto" });
-        await waitEvent(target, "canplay", 1400);
-        if (destroyed || token !== playToken) return reveal.done(false);
       }
       target.loop = playKind === "wait";
 
@@ -322,7 +336,6 @@ window.HF_VideoPlayer = (() => {
         target.playbackRate = 1;
       } catch (_) {}
 
-      // 以 playing 事件當「真的開演」的訊號：影片晚幾秒才就緒也換得掉立繪。
       let shown = false;
       const showVideo = () => {
         if (shown || destroyed || token !== playToken) return;
@@ -334,14 +347,33 @@ window.HF_VideoPlayer = (() => {
       };
       target.addEventListener("playing", showVideo, { once: true });
 
-      try {
-        const p = target.play();
+      const tryPlay = async (el) => {
+        const p = el.play();
         if (p && typeof p.then === "function") await p;
+      };
+
+      try {
+        await tryPlay(target);
         if (destroyed || token !== playToken) return reveal.done(false);
         showVideo();
       } catch (_) {
-        // 播不動就安靜放棄，舞台維持空的召喚陣 —— 不拿角色圖去頂
         target.removeEventListener("playing", showVideo);
+        if (destroyed || token !== playToken) return reveal.done(false);
+        // 雙緩衝在 iOS 上常被擋：改在目前這顆 video 上換 src 再播。
+        try {
+          if (video && video !== target) {
+            videos.forEach((v) => { try { v.pause(); } catch (e) {} });
+            setSource(video, src, { loop: playKind === "wait", preload: "auto" });
+            target = video;
+            target.addEventListener("playing", showVideo, { once: true });
+            await tryPlay(target);
+            if (destroyed || token !== playToken) return reveal.done(false);
+            showVideo();
+            return;
+          }
+        } catch (e2) {
+          target.removeEventListener("playing", showVideo);
+        }
         if (token === playToken) setBadge("");
         reveal.done(false);
       }
@@ -381,10 +413,9 @@ window.HF_VideoPlayer = (() => {
           target?.removeEventListener("ended", onEnded);
           target?.removeEventListener("error", onError);
           setBadge("");
-          root.classList.remove("vp-confirm", "vp-video-ready");
+          root.classList.remove("vp-confirm");
           setState("holding");
           videos.forEach((el) => {
-            el.classList.remove("is-active");
             try { el.pause(); } catch (_) {}
             try {
               el.defaultPlaybackRate = 1;
@@ -428,13 +459,19 @@ window.HF_VideoPlayer = (() => {
         target.addEventListener("ended", onEnded, { once: true });
         target.addEventListener("error", onError, { once: true });
 
-        if (target.readyState < 3) {
-          await waitEvent(target, "canplay", Math.min(560, Math.max(220, (maxMs | 0) - 180)));
+        // iOS 同時只能播一支，先把另一顆停掉。
+        videos.forEach((el) => {
+          if (el !== target) {
+            try { el.pause(); } catch (_) {}
+            el.classList.remove("is-active");
+          }
+        });
+
+        if (target.readyState < 2) {
+          await waitEvent(target, "loadeddata", 2400);
         }
         if (destroyed || token !== playToken || settled) return finish();
-        // 載不動就直接收尾，不要呆等硬上限（手機網路差時會像卡住）。
-        // 不拿角色圖去頂一拍：睿哥要求進動畫前不要出現大頭圖案。
-        if (target.error || target.readyState < 2) return finish();
+        if (target.error) return finish();
 
         try {
           target.currentTime = 0;
@@ -498,7 +535,7 @@ window.HF_VideoPlayer = (() => {
       root.remove();
     }
 
-    return { play, playOnce, prepare, prime, pause, stop, destroy, el: root, setBadge };
+    return { play, playOnce, prepare, prime, pause, stop, destroy, el: root, setBadge, get currentId() { return currentId; } };
   }
 
   return { create, loadManifest, videoUrl, versioned };
