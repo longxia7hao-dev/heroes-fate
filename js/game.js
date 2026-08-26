@@ -271,8 +271,9 @@
     return `${path}?v=${window.HF_ASSET_V?.[path] || ART_VERSION}`;
   }
 
+  /** 結果頁立繪。同樣改吃 WebP —— 理由見下面的 waitPoster()。 */
   function heroImg(id) {
-    return artUrl(`assets/heroes/${id}.png`);
+    return artUrl(`assets/heroes/card/${id}.webp`);
   }
 
   /** 選角縮圖：雲端「選擇角色縮圖」頭像（3:4） */
@@ -335,8 +336,18 @@
   let pickFlipWait = null;
   let pickFlipQueued = null;
 
+  /**
+   * 選角翻牌的卡面。
+   *
+   * ⚠️ **一定要用 `card/*.webp`，不要指回 `assets/heroes/*.png`。**
+   * 那批 PNG 是 512×512 無透明的 RGB，一張就 **293KB**；卡面是**每點一個角色
+   * 就換一次**的熱路徑，睿哥實測 6 秒內點過六隻，等於硬拉了近 2MB，
+   * 螢幕錄影量到 81% 的畫面是靜止的、最長凍結 1.7 秒。
+   * 同一張圖轉成 WebP 只要 **27KB（-91%）**，並排比對看不出差別
+   *（平均像素差 1.54/255）。轉檔工具：`tools/gen_hero_cards.py`。
+   */
   function waitPoster(id) {
-    return `assets/heroes/${id}.png`;
+    return artUrl(`assets/heroes/card/${id}.webp`);
   }
 
   function waitMs(ms) {
