@@ -30,8 +30,8 @@ PATTERNS = [
     "assets/videos/poster/**/*.jpg",
     "assets/heroes/*.png",
     "assets/heroes/portraits/*.jpg",
-    # 選角翻牌的卡面（由 tools/gen_hero_cards.py 產生）。這是每點一個角色
-    # 就換一次的熱路徑，一定要進逐檔版本表，換圖時才只重抓那一張。
+    # 結果頁使用的輕量角色卡（由 tools/gen_hero_cards.py 產生）。選角翻牌
+    # 自 v1.61 起直接揭露 Sora 影片，不再把這批 512×512 卡圖當中繼畫面。
     "assets/heroes/card/*.webp",
     # 音檔：換掉幾個音效時，其餘 40 幾支（含 4MB 的角色 BGM）網址不變、不重抓
     "assets/audio/**/*.mp3",

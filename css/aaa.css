@@ -380,7 +380,8 @@ html.in-app-chrome #screen-pick .pick-actions .btn {
   flex-direction: column;
 }
 #screen-pick .pick-arena {
-  flex: 1 1 0;
+  display: grid;
+  grid-template-rows: max-content minmax(0, 1fr) max-content;
   min-height: 0;
   height: 100%;
   max-height: 100%;
@@ -404,13 +405,12 @@ html.in-app-chrome #screen-pick .pick-actions .btn {
   font-size: 0.62rem;
 }
 #screen-pick .pick-u {
-  flex: 1 1 0;
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) max-content;
   gap: 0.14rem;
-  overflow: visible;
+  overflow: hidden;
 }
 #screen-pick .pick-stage-core,
 #screen-pick .sprite-stage,
@@ -423,13 +423,16 @@ html.in-app-chrome #screen-pick .pick-actions .btn {
 #screen-pick .hero-grid {
   flex: 0 0 auto;
   min-height: 0;
+  position: relative;
+  z-index: 1;
   overflow: visible;
 }
 #screen-pick .pick-footer {
-  flex: 0 0 auto;
   position: relative;
-  z-index: 8;
-  padding-bottom: 0.12rem;
+  z-index: 2;
+  min-height: 0;
+  padding-bottom: max(0.12rem, env(safe-area-inset-bottom, 0px));
+  contain: layout;
 }
 #screen-pick .pick-actions .btn {
   min-height: 44px;
@@ -496,8 +499,7 @@ html.in-app-chrome #screen-pick .pick-actions .btn {
 #screen-pick .pick-card.no-anim {
   transition: none !important;
 }
-#screen-pick .pick-face-back,
-#screen-pick .pick-face-art {
+#screen-pick .pick-face-back {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -508,7 +510,6 @@ html.in-app-chrome #screen-pick .pick-actions .btn {
   pointer-events: none;
   z-index: 1;
 }
-#screen-pick .pick-face-art[hidden],
 #screen-pick .pick-face-back[hidden] {
   display: none !important;
 }
@@ -544,6 +545,30 @@ html.in-app-chrome #screen-pick .pick-actions .btn {
   letter-spacing: 0.1em;
 }
 
+/*
+ * ornate.css 已定義平板左右雙欄，但 aaa.css 載入較晚；上方 mobile-first 的
+ * 單欄值若不在這裡覆寫，≥700px 會退回「舞台 0 高、四欄卡片撐出畫面」。
+ */
+@media (min-width: 700px) {
+  #screen-pick .pick-u {
+    grid-template-columns: minmax(0, 1.48fr) minmax(278px, 0.92fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: clamp(0.7rem, 1.7vw, 1.15rem);
+    overflow: hidden;
+  }
+  #screen-pick .hero-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: repeat(4, minmax(0, auto));
+    align-content: center;
+    align-self: stretch;
+    gap: clamp(0.35rem, 0.8vw, 0.58rem);
+    padding: 0.25rem 0.08rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+}
+
 @media (max-height: 780px) {
   #screen-pick .pick-header .flavor,
   #screen-pick .pick-status {
@@ -558,6 +583,72 @@ html.in-app-chrome #screen-pick .pick-actions .btn {
   }
   #screen-pick .pick-actions {
     margin-top: 0.16rem;
+  }
+}
+
+/**
+ * Tesla 車機的近期瀏覽器會把 1920×1200 面板縮成約 773×601 CSS px：
+ * 寬度剛跨進平板雙欄、可用高度卻比一般平板少。這裡把 header／間距收緊，
+ * 仍維持左側原比例影片、右側 4 欄英雄、底部操作獨立列，不讓三區互撞。
+ */
+@media (min-width: 700px) and (max-width: 900px) and (max-height: 650px) {
+  #screen-pick {
+    padding:
+      max(0.22rem, env(safe-area-inset-top, 0px))
+      max(0.32rem, env(safe-area-inset-right, 0px))
+      max(0.22rem, env(safe-area-inset-bottom, 0px))
+      max(0.32rem, env(safe-area-inset-left, 0px));
+  }
+  #screen-pick .pick-arena {
+    gap: 0.16rem;
+  }
+  #screen-pick .pick-header {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.18rem 0.5rem;
+    padding: 0;
+  }
+  #screen-pick .pick-header-text {
+    min-width: 0;
+  }
+  #screen-pick .pick-header-text h2 {
+    font-size: 0.94rem;
+  }
+  #screen-pick .pick-header #pick-weapon {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #screen-pick .pick-header .flavor,
+  #screen-pick .pick-status {
+    display: none;
+  }
+  #screen-pick .pick-u {
+    grid-template-columns: minmax(0, 1.5fr) minmax(258px, 0.9fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 0.42rem;
+  }
+  #screen-pick .hero-grid {
+    align-content: center;
+    gap: 0.2rem;
+    padding: 0.08rem 0;
+  }
+  #screen-pick .hero-grid .hero-card {
+    padding: 0.1rem 0.08rem 0.14rem;
+  }
+  #screen-pick .hero-card .nm {
+    margin: 0.1rem -0.08rem -0.14rem;
+    padding-block: 0.12rem;
+    font-size: 9px;
+  }
+  #screen-pick .party-dots {
+    margin-top: 0;
+    padding-block: 0.04rem;
+  }
+  #screen-pick .pick-actions {
+    margin-top: 0.08rem;
+  }
+  #screen-pick .pick-footer {
+    padding-bottom: max(0.04rem, env(safe-area-inset-bottom, 0px));
   }
 }
 

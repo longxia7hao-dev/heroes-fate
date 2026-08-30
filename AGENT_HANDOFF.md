@@ -21,7 +21,7 @@
 | 路徑 | `/Users/longxia7hao/Heroes_Fate/` |
 | GDD | `/Users/longxia7hao/Heroes_Fate_GDD/GDD.md`（v0.9，目標最終 Unity） |
 | 規模 | 整包約 **476MB**；實際在用的只有約 70MB（`assets/videos/mobile` 55MB＋`poster` 1.3MB＋`audio` 4.1MB＋`heroes` 7MB＋少數背景），其餘是舊高碼率原片與已停用的 `assets/anim`（128MB） |
-| 目前版本 | **v1.8（2026-08-13）**：14 角色，每角 wait／confirm／attack／**final**／victory 五支影片（manifest 70 條引用零缺檔）；六模式＋命運卡＋命運一擊＋懲罰任務＋今晚戰績＋命運卷軸。細節一律看 `PROJECT_NOTES.md` |
+| 目前版本 | **v1.61（2026-08-30）**：14 角色，每角 wait／confirm／attack／**final**／victory 五支影片（manifest 70 條引用零缺檔）；單一原版惡魔魔王；平板／Tesla 選角雙欄；翻牌直接揭露原比例影片。細節一律看 `PROJECT_NOTES.md` |
 
 **鐵則（GDD）**
 
@@ -100,14 +100,14 @@ Heroes_Fate/
 │   └── viewer3d.js         # 舊 Three.js 預覽（目前未掛 index）
 ├── assets/
 │   ├── videos/
-│   │   ├── manifest.json   # id → wait/confirm/victory 路徑 ★
-│   │   ├── wait/*.mp4      # 13 支（選角預覽循環）
-│   │   ├── confirm/*.mp4   # 13 支（按「決定」播一次）
-│   │   └── victory/*.mp4   # 10 支（缺 3 支見下）
-│   ├── heroes/{id}.png     # 13 張靜圖（列表／結果／影片後備）
+│   │   ├── manifest.json   # 14 角 → wait/confirm/attack/final/victory ★
+│   │   ├── mobile/{wait,confirm,attack,final,victory}/*.mp4
+│   │   └── mobile/boss/arrival.mp4（唯一惡魔魔王降臨片）
+│   ├── heroes/{id}.png     # 14 張靜圖（舊模組／後備；選角主路徑不使用）
 │   ├── heroes/_legacy/     # 舊 12 角立繪封存
 │   ├── anim/               # 舊 Imagine/sheet 逐幀（walk/attack）— 次要
-│   ├── bg_boss.jpg, bg_party.jpg, boss_model.png, ref_battle.mp4, cine_*.jpg
+│   ├── bg_boss.jpg, bg_party.jpg, boss_model.png, cine_*.jpg
+│   ├── ref_battle.mp4（本機 legacy 原片；runtime／版控皆不使用）
 │   └── ...
 ├── PROJECT_NOTES.md        # 輕量共享筆記（多 AI 協作用）
 ├── PHONE_ONLINE.txt        # 公開網址備忘
@@ -215,11 +215,11 @@ state = {
 
 **魔王討伐演出 `presentBossRaid`：**
 
-集結 → 降臨 → `ref_battle.mp4` → 輪切懸念 → 怒吼煙霧 → 揭示勝者 → `HF_VictoryFilm.play`
+集結 → 惡魔魔王降臨 → 各英雄攻擊連播 → 怒吼煙霧 → 揭示勝者 → final → `HF_VictoryFilm.play`
 
 ### 5.3 `js/videoPlayer.js` — `HF_VideoPlayer`
 
-- `create(container)` → `{ play, playOnce, destroy }`
+- `create(container)` → `{ prepareReveal, revealPrepared, playOnce, prime, cancelPrime, destroy }`
 - `play(id, 'wait')`：循環
 - `playOnce(id, 'confirm', maxMs)`：等 canplay、硬上限防卡死
 - 選角等待：`object-fit: contain` + 紫底（避免裁頭與黑邊）

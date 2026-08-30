@@ -4,125 +4,97 @@
     "confirm": "assets/videos/mobile/confirm/dark_elf.mp4",
     "attack": "assets/videos/mobile/attack/dark_elf.mp4",
     "final": "assets/videos/mobile/final/dark_elf.mp4",
-    "victory": "assets/videos/mobile/victory/dark_elf.mp4",
-    "final_golem": "assets/videos/mobile/final_golem/dark_elf.mp4",
-    "final_ember": "assets/videos/mobile/final_ember/dark_elf.mp4"
+    "victory": "assets/videos/mobile/victory/dark_elf.mp4"
   },
   "ranger": {
     "wait": "assets/videos/mobile/wait/ranger.mp4",
     "confirm": "assets/videos/mobile/confirm/ranger.mp4",
     "attack": "assets/videos/mobile/attack/ranger.mp4",
     "final": "assets/videos/mobile/final/ranger.mp4",
-    "victory": "assets/videos/mobile/victory/ranger.mp4",
-    "final_golem": "assets/videos/mobile/final_golem/ranger.mp4",
-    "final_ember": "assets/videos/mobile/final_ember/ranger.mp4"
+    "victory": "assets/videos/mobile/victory/ranger.mp4"
   },
   "paladin": {
     "wait": "assets/videos/mobile/wait/paladin.mp4",
     "confirm": "assets/videos/mobile/confirm/paladin.mp4",
     "attack": "assets/videos/mobile/attack/paladin.mp4",
     "final": "assets/videos/mobile/final/paladin.mp4",
-    "victory": "assets/videos/mobile/victory/paladin.mp4",
-    "final_golem": "assets/videos/mobile/final_golem/paladin.mp4",
-    "final_ember": "assets/videos/mobile/final_ember/paladin.mp4"
+    "victory": "assets/videos/mobile/victory/paladin.mp4"
   },
   "knight": {
     "wait": "assets/videos/mobile/wait/knight.mp4",
     "confirm": "assets/videos/mobile/confirm/knight.mp4",
     "attack": "assets/videos/mobile/attack/knight.mp4",
     "final": "assets/videos/mobile/final/knight.mp4",
-    "victory": "assets/videos/mobile/victory/knight.mp4",
-    "final_golem": "assets/videos/mobile/final_golem/knight.mp4",
-    "final_ember": "assets/videos/mobile/final_ember/knight.mp4"
+    "victory": "assets/videos/mobile/victory/knight.mp4"
   },
   "archmage": {
     "wait": "assets/videos/mobile/wait/archmage.mp4",
     "confirm": "assets/videos/mobile/confirm/archmage.mp4",
     "attack": "assets/videos/mobile/attack/archmage.mp4",
     "final": "assets/videos/mobile/final/archmage.mp4",
-    "victory": "assets/videos/mobile/victory/archmage.mp4",
-    "final_golem": "assets/videos/mobile/final_golem/archmage.mp4",
-    "final_ember": "assets/videos/mobile/final_ember/archmage.mp4"
+    "victory": "assets/videos/mobile/victory/archmage.mp4"
   },
   "princess": {
     "wait": "assets/videos/mobile/wait/princess.mp4",
     "confirm": "assets/videos/mobile/confirm/princess.mp4",
     "attack": "assets/videos/mobile/attack/princess.mp4",
     "final": "assets/videos/mobile/final/princess.mp4",
-    "victory": "assets/videos/mobile/victory/princess.mp4",
-    "final_golem": "assets/videos/mobile/final_golem/princess.mp4",
-    "final_ember": "assets/videos/mobile/final_ember/princess.mp4"
+    "victory": "assets/videos/mobile/victory/princess.mp4"
   },
   "orc_archer": {
     "wait": "assets/videos/mobile/wait/orc_archer.mp4",
     "confirm": "assets/videos/mobile/confirm/orc_archer.mp4",
     "attack": "assets/videos/mobile/attack/orc_archer.mp4",
     "final": "assets/videos/mobile/final/orc_archer.mp4",
-    "victory": "assets/videos/mobile/victory/orc_archer.mp4",
-    "final_golem": "assets/videos/mobile/final_golem/orc_archer.mp4",
-    "final_ember": "assets/videos/mobile/final_ember/orc_archer.mp4"
+    "victory": "assets/videos/mobile/victory/orc_archer.mp4"
   },
   "assassin": {
     "wait": "assets/videos/mobile/wait/assassin.mp4",
     "confirm": "assets/videos/mobile/confirm/assassin.mp4",
     "attack": "assets/videos/mobile/attack/assassin.mp4",
     "final": "assets/videos/mobile/final/assassin.mp4",
-    "victory": "assets/videos/mobile/victory/assassin.mp4",
-    "final_golem": "assets/videos/mobile/final_golem/assassin.mp4",
-    "final_ember": "assets/videos/mobile/final_ember/assassin.mp4"
+    "victory": "assets/videos/mobile/victory/assassin.mp4"
   },
   "dark_fighter": {
     "wait": "assets/videos/mobile/wait/dark_fighter.mp4",
     "confirm": "assets/videos/mobile/confirm/dark_fighter.mp4",
     "attack": "assets/videos/mobile/attack/dark_fighter.mp4",
     "final": "assets/videos/mobile/final/dark_fighter.mp4",
-    "victory": "assets/videos/mobile/victory/dark_fighter.mp4",
-    "final_golem": "assets/videos/mobile/final_golem/dark_fighter.mp4",
-    "final_ember": "assets/videos/mobile/final_ember/dark_fighter.mp4"
+    "victory": "assets/videos/mobile/victory/dark_fighter.mp4"
   },
   "dark_mage": {
     "wait": "assets/videos/mobile/wait/dark_mage.mp4",
     "confirm": "assets/videos/mobile/confirm/dark_mage.mp4",
     "attack": "assets/videos/mobile/attack/dark_mage.mp4",
     "final": "assets/videos/mobile/final/dark_mage.mp4",
-    "victory": "assets/videos/mobile/victory/dark_mage.mp4",
-    "final_golem": "assets/videos/mobile/final_golem/dark_mage.mp4",
-    "final_ember": "assets/videos/mobile/final_ember/dark_mage.mp4"
+    "victory": "assets/videos/mobile/victory/dark_mage.mp4"
   },
   "monk": {
     "wait": "assets/videos/mobile/wait/monk.mp4",
     "confirm": "assets/videos/mobile/confirm/monk.mp4",
     "attack": "assets/videos/mobile/attack/monk.mp4",
     "final": "assets/videos/mobile/final/monk.mp4",
-    "victory": "assets/videos/mobile/victory/monk.mp4",
-    "final_golem": "assets/videos/mobile/final_golem/monk.mp4",
-    "final_ember": "assets/videos/mobile/final_ember/monk.mp4"
+    "victory": "assets/videos/mobile/victory/monk.mp4"
   },
   "amazon": {
     "wait": "assets/videos/mobile/wait/amazon.mp4",
     "confirm": "assets/videos/mobile/confirm/amazon.mp4",
     "attack": "assets/videos/mobile/attack/amazon.mp4",
     "final": "assets/videos/mobile/final/amazon.mp4",
-    "victory": "assets/videos/mobile/victory/amazon.mp4",
-    "final_golem": "assets/videos/mobile/final_golem/amazon.mp4",
-    "final_ember": "assets/videos/mobile/final_ember/amazon.mp4"
+    "victory": "assets/videos/mobile/victory/amazon.mp4"
   },
   "axeman": {
     "wait": "assets/videos/mobile/wait/axeman.mp4",
     "confirm": "assets/videos/mobile/confirm/axeman.mp4",
     "attack": "assets/videos/mobile/attack/axeman.mp4",
     "final": "assets/videos/mobile/final/axeman.mp4",
-    "victory": "assets/videos/mobile/victory/axeman.mp4",
-    "final_golem": "assets/videos/mobile/final_golem/axeman.mp4",
-    "final_ember": "assets/videos/mobile/final_ember/axeman.mp4"
+    "victory": "assets/videos/mobile/victory/axeman.mp4"
   },
   "dragon_knight": {
     "wait": "assets/videos/mobile/wait/dragon_knight.mp4",
     "confirm": "assets/videos/mobile/confirm/dragon_knight.mp4",
     "attack": "assets/videos/mobile/attack/dragon_knight.mp4",
     "final": "assets/videos/mobile/final/dragon_knight.mp4",
-    "victory": "assets/videos/mobile/victory/dragon_knight.mp4",
-    "final_golem": "assets/videos/mobile/final_golem/dragon_knight.mp4",
-    "final_ember": "assets/videos/mobile/final_ember/dragon_knight.mp4"
+    "victory": "assets/videos/mobile/victory/dragon_knight.mp4"
   }
 }

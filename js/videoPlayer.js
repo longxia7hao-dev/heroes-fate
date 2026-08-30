@@ -5,7 +5,7 @@
  * - victory: play once on win film
  */
 window.HF_VideoPlayer = (() => {
-  const MANIFEST_VERSION = "14";
+  const MANIFEST_VERSION = "15";
   const MEDIA_VERSION = "27";
   /** 立繪／頭像／poster 的版本，必須與 game.js 的 ART_VERSION 一致 */
   const ART_VERSION = "6";
@@ -106,9 +106,18 @@ window.HF_VideoPlayer = (() => {
 
     let destroyed = false;
     let playToken = 0;
+    // currentId 是最新請求；visibleId 只有媒體真的在 90° 揭露點接手後才更新。
+    // 兩者分開可避免同一角色快速連點時，把「正在載入」誤判成「已顯示」。
     let currentId = null;
+    let visibleId = null;
     let video = videos[0];
     let standby = videos[1];
+    // 選角翻牌會先把下一支 wait 片播到第一幀，但要等卡牌轉到 90°
+    // 才真正換上畫面。這個 pending 只保存「已可揭露」的媒體，不會改選角狀態。
+    let pendingReveal = null;
+    let primeGeneration = 0;
+    let primedTarget = null;
+    let primedSrc = "";
 
     videos.forEach((el) => {
       el.preload = "metadata";
@@ -145,6 +154,7 @@ window.HF_VideoPlayer = (() => {
     }
 
     function showStill(id) {
+      pendingReveal = null;
       currentId = id || currentId;
       primeStill(currentId);
       videos.forEach((el) => {
@@ -154,12 +164,78 @@ window.HF_VideoPlayer = (() => {
       });
       root.classList.remove("vp-video-ready", "vp-confirm");
       setState("fallback");
+      visibleId = currentId;
       // 整支缺檔的防呆路徑：這時沒有動畫要等了，靜圖就是最終畫面，舞台要揭開
-      try { opts.onShown?.(currentId); } catch (_) {}
+      try { opts.onShown?.(visibleId); } catch (_) {}
     }
 
-    function activateVideo(target, token) {
+    /**
+     * 影片真的載不動時，準備已在選角格快取裡的 3:4 頭像當後備。
+     * 先保持 hidden，等翻牌 90° 的同一個揭露點才顯示；不會再先閃 512×512 方圖。
+     */
+    async function queueFallback(id, token) {
+      if (destroyed || !id || token !== playToken) return false;
+      currentId = id;
+      const p = `assets/heroes/portraits/${id}.jpg`;
+      const src = `${p}?v=${assetVersion(p, ART_VERSION)}`;
+      still.dataset.src = src;
+      still.src = src;
+      still.hidden = true;
+      videos.forEach((el) => {
+        try { el.pause(); } catch (_) {}
+      });
+
+      // 縮圖通常已在 hero grid 快取；若還沒完成，最多等 1.2 秒。只有真的
+      // 有像素才建立 pending，避免缺圖時翻走卡背後留下透明空框。
+      if (!(still.complete && still.naturalWidth > 0)) {
+        const loaded = await new Promise((resolve) => {
+          let done = false;
+          const finish = (ok) => {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            still.removeEventListener("load", onLoad);
+            still.removeEventListener("error", onError);
+            resolve(ok);
+          };
+          const onLoad = () => finish(true);
+          const onError = () => finish(false);
+          const timer = setTimeout(() => finish(false), 1200);
+          still.addEventListener("load", onLoad, { once: true });
+          still.addEventListener("error", onError, { once: true });
+        });
+        if (!loaded) return false;
+      }
+      if (
+        destroyed ||
+        token !== playToken ||
+        still.dataset.src !== src ||
+        !still.naturalWidth
+      ) return false;
+
+      pendingReveal = { type: "still", id, token, src };
+      setState("fallback-ready");
+      return true;
+    }
+
+    function prepareFallback(id) {
+      if (destroyed || !id) return Promise.resolve(false);
+      primeGeneration++;
+      primedTarget = null;
+      primedSrc = "";
+      const token = ++playToken;
+      pendingReveal = null;
+      currentId = id;
+      return queueFallback(id, token);
+    }
+
+    function activateVideo(target, token, id = currentId) {
       if (destroyed || token !== playToken || !target) return false;
+      pendingReveal = null;
+      if (target === primedTarget) {
+        primedTarget = null;
+        primedSrc = "";
+      }
       const previous = video;
       target.hidden = false;
       target.classList.add("is-active");
@@ -174,10 +250,63 @@ window.HF_VideoPlayer = (() => {
         : previous;
       still.hidden = true;
       root.classList.add("vp-video-ready");
+      currentId = id || currentId;
+      visibleId = id || currentId;
       // 影片真的上畫面了才通知呼叫端揭開舞台。放在這裡而不是 play() 裡，
       // 是因為確定動畫（playOnce）走的是另一條路徑，漏掉它就會「動畫在
       // 被隱藏的舞台裡播完」——玩家什麼都沒看到。
-      try { opts.onShown?.(currentId); } catch (_) {}
+      try { opts.onShown?.(visibleId); } catch (_) {}
+      return true;
+    }
+
+    /** 在翻牌轉到 90° 的那一刻，才把已就緒的影片／後備頭像換上畫面。 */
+    function revealPrepared(id) {
+      const pending = pendingReveal;
+      if (
+        destroyed ||
+        !pending ||
+        pending.token !== playToken ||
+        pending.id !== id
+      ) return false;
+
+      if (pending.type === "video") {
+        // standby 可能被手指預熱碰過；來源不再相符就絕不揭露錯角色。
+        if (
+          !pending.target ||
+          pending.target.dataset.src !== pending.src ||
+          pending.target.readyState < 2
+        ) return false;
+        pendingReveal = null;
+        // 準備期間影片可在不可見層先觸發 playing；真正揭露時歸零，確保
+        // 翻回正面看到的是完整待選動畫開頭，而不是已偷跑數百毫秒。
+        try { pending.target.currentTime = 0; } catch (_) {}
+        if (!activateVideo(pending.target, pending.token, pending.id)) return false;
+        try {
+          const resume = pending.target.play();
+          resume?.catch?.(() => {});
+        } catch (_) {}
+        setState("playing");
+        if (pending.playKind === "wait") primeMedia(id, "confirm");
+        return true;
+      }
+
+      if (
+        still.dataset.src !== pending.src ||
+        !still.complete ||
+        !still.naturalWidth
+      ) return false;
+      pendingReveal = null;
+      videos.forEach((el) => {
+        el.classList.remove("is-active");
+        el.hidden = true;
+        try { el.pause(); } catch (_) {}
+      });
+      still.hidden = false;
+      root.classList.remove("vp-video-ready", "vp-confirm");
+      setState("fallback");
+      currentId = pending.id;
+      visibleId = pending.id;
+      try { opts.onShown?.(visibleId); } catch (_) {}
       return true;
     }
 
@@ -204,10 +333,15 @@ window.HF_VideoPlayer = (() => {
       if (destroyed || !id || !standby || standby === video) return;
       const url = videoUrl(id, kind);
       if (!url) return;
-      setSource(standby, versioned(url), {
+      const src = versioned(url);
+      setSource(standby, src, {
         loop: kind === "wait",
         preload: "auto",
       });
+      if (standby === primedTarget && primedSrc !== src) {
+        primedTarget = null;
+        primedSrc = "";
+      }
     }
 
     /**
@@ -245,17 +379,54 @@ window.HF_VideoPlayer = (() => {
      */
     async function prime(id, kind = "wait") {
       if (destroyed || !id) return;
-      if (kind === "wait" && currentId === id) return;
+      if (pendingReveal) return;
+      // current 與 visible 不同代表另一支待選片仍在解碼；pointer 預熱不能
+      // 共用它的 standby。真正 click 會用新 playToken 安全接手。
+      if (currentId && currentId !== visibleId) return;
+      if (kind === "wait" && visibleId === id) return;
+      const generation = ++primeGeneration;
       const token = playToken;
       await loadManifest();
-      if (destroyed || token !== playToken) return;
+      if (
+        destroyed ||
+        pendingReveal ||
+        (currentId && currentId !== visibleId) ||
+        generation !== primeGeneration ||
+        token !== playToken
+      ) return;
       const target = standby && standby !== video ? standby : null;
       const url = videoUrl(id, kind);
       if (!target || !url) return;
-      setSource(target, versioned(url), {
+      const src = versioned(url);
+      setSource(target, src, {
         loop: kind === "wait",
         preload: "auto",
       });
+      if (destroyed || generation !== primeGeneration || token !== playToken) return;
+      primedTarget = target;
+      primedSrc = src;
+    }
+
+    /** 取消一次沒有形成 click 的手指預熱，且絕不碰 active／pending 影片。 */
+    function cancelPrime() {
+      primeGeneration++;
+      const target = primedTarget;
+      const src = primedSrc;
+      primedTarget = null;
+      primedSrc = "";
+      if (
+        !target ||
+        target.classList.contains("is-active") ||
+        pendingReveal?.target === target ||
+        target.dataset.src !== src
+      ) return;
+      try { target.pause(); } catch (_) {}
+      try {
+        target.removeAttribute("src");
+        target.removeAttribute("data-src");
+        target.hidden = true;
+        target.load();
+      } catch (_) {}
     }
 
     /**
@@ -266,37 +437,61 @@ window.HF_VideoPlayer = (() => {
      */
     function beginReveal() {
       let settled = false;
+      let result = false;
       let resolveFn = () => {};
       const promise = new Promise((r) => { resolveFn = r; });
       const done = (ok) => {
         if (settled) return;
         settled = true;
+        result = !!ok;
         clearTimeout(timer);
-        resolveFn(!!ok);
+        resolveFn(result);
       };
       const timer = setTimeout(() => done(false), REVEAL_GIVEUP_MS);
-      return { promise, done };
+      return {
+        promise,
+        done,
+        get settled() { return settled; },
+        get result() { return result; },
+      };
     }
 
     /** @returns {Promise<boolean>} 影片是否真的出現在畫面上 */
     function play(id, playKind = "wait") {
+      return startPlay(id, playKind, false);
+    }
+
+    /**
+     * 先播到第一幀但暫不換畫面；由 revealPrepared() 在翻牌中點揭露。
+     * @returns {Promise<boolean>} 是否已有可揭露的影片／manifest 後備
+     */
+    function prepareReveal(id, playKind = "wait") {
+      return startPlay(id, playKind, true);
+    }
+
+    function startPlay(id, playKind, deferShow) {
       if (destroyed || !id) return Promise.resolve(false);
+      primeGeneration++;
+      primedTarget = null;
+      primedSrc = "";
       const token = ++playToken;
+      pendingReveal = null;
       currentId = id;
       setBadge(playKind === "confirm" ? "鎖定中…" : "");
       root.classList.toggle("vp-confirm", playKind === "confirm");
       setState("loading");
       const reveal = beginReveal();
-      runPlay(id, playKind, token, reveal).catch(() => reveal.done(false));
+      runPlay(id, playKind, token, reveal, { deferShow }).catch(() => reveal.done(false));
       return reveal.promise;
     }
 
-    async function runPlay(id, playKind, token, reveal) {
+    async function runPlay(id, playKind, token, reveal, { deferShow = false } = {}) {
       await loadManifest();
       if (destroyed || token !== playToken) return reveal.done(false);
 
       const url = videoUrl(id, playKind);
       if (!url) {
+        if (deferShow) return reveal.done(await queueFallback(id, token));
         showStill(id);
         setBadge("");
         return reveal.done(true);
@@ -306,10 +501,11 @@ window.HF_VideoPlayer = (() => {
 
       // 換角立刻收掉舊角色：寧可空一拍召喚陣，也不要停在上一位。
       const alreadyThis = videos.some((v) => v.dataset.src === src && v.readyState >= 2);
-      if (!alreadyThis) {
+      if (!deferShow && !alreadyThis) {
         videos.forEach((v) => {
           if (v.dataset.src !== src) v.classList.remove("is-active");
         });
+        visibleId = null;
         try { opts.onHide?.(); } catch (_) {}
       }
 
@@ -322,6 +518,7 @@ window.HF_VideoPlayer = (() => {
         || (standby && standby !== video ? standby : video)
         || video;
       if (!target) {
+        if (deferShow) return reveal.done(await queueFallback(id, token));
         showStill(id);
         return reveal.done(true);
       }
@@ -338,9 +535,19 @@ window.HF_VideoPlayer = (() => {
 
       let shown = false;
       const showVideo = () => {
-        if (shown || destroyed || token !== playToken) return;
+        if (shown || destroyed || token !== playToken || reveal.settled) return;
         shown = true;
-        activateVideo(target, token);
+        if (deferShow) {
+          // `playing` 代表第一幀已解碼。先在不可見層暫停並歸零，等卡牌
+          // 轉到 90° 才重新播放，因此不會在翻牌期間偷跑。
+          try { target.pause(); } catch (_) {}
+          try { target.currentTime = 0; } catch (_) {}
+          pendingReveal = { type: "video", id, token, target, playKind, src };
+          setState("ready");
+          reveal.done(true);
+          return;
+        }
+        activateVideo(target, token, id);
         setState("playing");
         reveal.done(true);
         if (playKind === "wait") primeMedia(id, "confirm");
@@ -359,6 +566,11 @@ window.HF_VideoPlayer = (() => {
       } catch (_) {
         target.removeEventListener("playing", showVideo);
         if (destroyed || token !== playToken) return reveal.done(false);
+        // deferred 選角不可拿目前可見的 active 緩衝重試；iOS 拒播時改準備
+        // 已快取的 3:4 頭像，卡背會一直留到後備像素就緒。
+        if (deferShow) {
+          return reveal.done(await queueFallback(id, token));
+        }
         // 雙緩衝在 iOS 上常被擋：改在目前這顆 video 上換 src 再播。
         try {
           if (video && video !== target) {
@@ -385,7 +597,11 @@ window.HF_VideoPlayer = (() => {
     function playOnce(id, playKind = "confirm", maxMs = 4200, nextWaitId = null, opts = {}) {
       return new Promise(async (resolve) => {
         if (destroyed || !id) return resolve();
+        primeGeneration++;
+        primedTarget = null;
+        primedSrc = "";
         const token = ++playToken;
+        pendingReveal = null;
         currentId = id;
         let settled = false;
         let timer = 0;
@@ -488,7 +704,7 @@ window.HF_VideoPlayer = (() => {
           const p = target.play();
           if (p && typeof p.then === "function") await p;
           if (destroyed || token !== playToken || settled) return finish();
-          activateVideo(target, token);
+          activateVideo(target, token, id);
           setState("playing");
           playStartedAt = performance.now();
           if (tapSkip) tapTarget.addEventListener("click", onTap);
@@ -501,7 +717,13 @@ window.HF_VideoPlayer = (() => {
 
     function pause() {
       if (destroyed) return;
+      primeGeneration++;
+      primedTarget = null;
+      primedSrc = "";
       playToken++;
+      pendingReveal = null;
+      currentId = null;
+      visibleId = null;
       videos.forEach((el) => {
         el.classList.remove("is-active");
         try { el.pause(); } catch (_) {}
@@ -535,7 +757,23 @@ window.HF_VideoPlayer = (() => {
       root.remove();
     }
 
-    return { play, playOnce, prepare, prime, pause, stop, destroy, el: root, setBadge, get currentId() { return currentId; } };
+    return {
+      play,
+      prepareReveal,
+      revealPrepared,
+      prepareFallback,
+      playOnce,
+      prepare,
+      prime,
+      cancelPrime,
+      pause,
+      stop,
+      destroy,
+      el: root,
+      setBadge,
+      get currentId() { return currentId; },
+      get visibleId() { return visibleId; },
+    };
   }
 
   return { create, loadManifest, videoUrl, versioned };

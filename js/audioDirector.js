@@ -125,7 +125,6 @@ window.HF_Audio = (() => {
      */
     "strike.rune": ["rune_light", 0.98, 1],
     "battle.gather": ["wheel_hit", 0.42, 0.82],
-    "battle.clash": ["smoke_burst", 0.52, 1.06],
     "boss.enter": ["boss_stinger", 0.84, 1],
     "boss.roar": ["boss_roar", 0.92, 1],
     "boss.defeat": ["boss_defeat", 0.88, 1],

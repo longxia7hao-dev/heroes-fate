@@ -6,8 +6,8 @@
 
 ## 目前狀態
 
-- 最後更新：2026-08-26（Claude Code）
-- 進度：可玩 **v1.58**；手機維持 14 張選角卡 7×2，平板（≥700px）改為最大 920px 的直／橫向自適應版面，選角採左側 Sora 舞台＋右側 4 欄英雄；角色卡、玩家圓點、戰鬥 HUD 與分隊英雄節點改為持久 DOM 更新；選角與魔王戰媒體採有上限的序列預熱，低階／省流量裝置自動降載高成本裝飾；14 角色影片與角色 BGM／招式／勝利音效均完整保留
+- 最後更新：2026-08-30（Codex）
+- 進度：可玩 **v1.61**；手機維持 14 張選角卡 7×2，平板／Tesla 車機採左側原比例 Sora 舞台＋右側 4 欄英雄，header／角色區／底部操作列各有獨立高度，不再互相覆蓋；選角已移除 512×512 方形中繼立繪，待機片第一幀就緒後才翻牌並在 90° 中點直接揭露影片；快速連點 last-wins、取消的 pointer 預熱會釋放；14 角色影片與角色 BGM／招式／勝利音效完整保留
 - 路徑：`/Users/longxia7hao/Heroes_Fate/`
 - **開工必讀（會自動載入，跨裝置都有效）：`CLAUDE.md`**；架構長篇說明：`AGENT_HANDOFF.md`（內文現況數字是 2026-08-01 的舊值，只當背景讀）
 - **GitHub（2026-08-13 建立）**：`longxia7hao-dev/heroes-fate`（公開），版本控制 265 檔約 73MB；`assets/anim`（128MB）與舊高碼率原片 `assets/videos/{wait,confirm,victory}`（272MB）由 `.gitignore` 排除，只留本機與 Drive
@@ -24,13 +24,13 @@
 - 攻擊魔王動畫：`assets/videos/mobile/attack/*.mp4`（14 支約 3.04s，CRF 29 共 8.1MB）— 魔王戰的英雄切入用這個，缺片才退回 confirm；v1.47 起只預熱下一支，背景 attack `<video>` 永遠最多 1 個，勝者 final 延到第一支攻擊交棒後才預熱
 - 選角卡縮圖：`assets/heroes/portraits/*.jpg`（14 張 240×322 頭像，共 188,335 bytes）；舊的 `assets/heroes/thumbs/` 已停用
 - 播放倍率：確定選擇片 **1× 原速**（3.00–3.04s 完整播完，硬上限 4200ms）；攻擊／勝利短片維持 **1.3×**（完整播完不截斷）
-- 魔王戰演出順序：集結→**魔王降臨影片（7s，缺片才退回立繪動畫）**→全軍突擊→**各角色攻擊切入連播**→魔王怒吼→**命運一擊（全員按住 3 秒）**→**勝者的打敗魔王專屬影片 final（1.3×，等待 8s／播放上限 14s）**→角色勝利短片→結果頁；**命運審判也會播 final**（只是收在「審判降下……」而非勝利片）；**攻擊輪播時點一下切入層可跳下一位（`click`＋前 600ms 防誤觸），不點則自然播完**；首幀 poster 見 `assets/videos/poster/{attack,victory,final}/` 與 `poster/boss/arrival.jpg`（43 張 1.3MB，2026-08-13 由現行影片全數重製）
-- 素材快取：`tools/gen_asset_versions.py` 會為影片、音檔、立繪、選角頭像與 poster 產生逐檔內容雜湊（`js/assetVersions.js`）；查不到才退回 `ART_VERSION=4`／全域媒體版本。換素材後必跑工具，不要回退成整包加版號
+- 魔王戰演出順序：集結→**唯一的原版惡魔魔王降臨影片（缺片才退回立繪動畫）**→**各角色攻擊切入連播**→魔王怒吼→**命運一擊（全員按住 3 秒）**→**勝者的打敗魔王專屬影片 final（1.3×，等待 8s／播放上限 14s）**→角色勝利短片→結果頁；**已移除的「全軍突擊」不得加回**；**命運審判也會播 final**（只是收在「審判降下……」而非勝利片）；**攻擊輪播時點一下切入層可跳下一位（`click`＋前 600ms 防誤觸），不點則自然播完**；首幀 poster 見 `assets/videos/poster/{attack,victory,final}/` 與 `poster/boss/arrival.jpg`（43 張 1.3MB，2026-08-13 由現行影片全數重製）
+- 素材快取：`tools/gen_asset_versions.py` 會為影片、音檔、立繪、選角頭像與 poster 產生逐檔內容雜湊（`js/assetVersions.js`）；查不到才退回 `ART_VERSION=6`／全域媒體版本。換素材後必跑工具，不要回退成整包加版號
 - 設定生效時機：`命運卡`／`命運一擊`／懲罰題庫是在按設定視窗的**「關閉」**時才寫回 `state.opts`（`#settings-close` handler），不是勾選當下
 - 缺片狀態：**無**（wait／confirm／attack／final／victory 各 14 支；manifest 共 70 條引用）
 - 模式：**魔王討伐／命運排序／命運分隊(2-4)**（2026-08-15 依睿哥指示移除命運配對／命運審判／命運淘汰的卡片；**doom 的程式碼仍在**，因為命運卡「逆命」會把魔王討伐換成審判）；每局開場翻**命運卡**（4 張，可關；已移除「雙重命運」，一局只有一位勝利者）；揭曉前有**命運一擊**（可關）；結果頁可抽**懲罰任務**、看**今晚戰績**、產**命運卷軸**圖卡
 - 影片體積：`mobile/` 58.71MiB＋ `poster/` 1.59MiB；舊高碼率原始檔仍在 `assets/videos/{wait,confirm,victory}/`，不在現行 manifest 主路徑
-- 戰鬥素材：`assets/bg_battle_arena_v2.jpg` + 延遲載入的 `assets/boss_model_v3.{webp,png}` + `assets/ref_battle_mobile.mp4`；後者是遊戲實際只播的前 1.67s 手機版（125,278 bytes、無音軌、faststart），完整 9.93s 原片仍保留於本機忽略檔 `assets/ref_battle.mp4`
+- 戰鬥素材：`assets/bg_battle_arena_v2.jpg` + 延遲載入的 `assets/boss_model_v3.{webp,png}` + `assets/videos/mobile/boss/arrival.mp4`；舊完整參考片 `assets/ref_battle.mp4` 只留睿哥 Mac 本機且由 `.gitignore` 排除，runtime 不引用
 - 角色選角 BGM：來源為 Google Drive `我的雲端硬碟/英雄命運抽（heroes fate)/伴奏/`；首頁 1 首＋角色 14 首皆由約 30.8s 原片擷取 12s 最強辨識段，輸出 44.1kHz stereo 96kbps、約 -14 LUFS、TP 不高於 -1.5dB，短淡入／淡出後循環；重建工具 `tools/extract_character_bgm.py`
 - 聲音來源：使用者製作的開始選單伴奏與 14 角選角 BGM 使用上述 Google Drive 來源；原有場景 BGM／UI／魔王共用聲效由 `tools/generate_audio.py` 原創程序化生成；既有 13 角攻擊與勝利音效由使用者 Google Drive 對應 Sora 原片抽出；龍騎士兩支專屬音效由專案既有原創 attack／chime 素材重新混音
 - GDD：`/Users/longxia7hao/Heroes_Fate_GDD/GDD.md`
@@ -42,6 +42,8 @@
 - 角色選擇要有建模立繪；不需要輸入名字
 
 ## 變更日誌
+
+- 2026-08-30｜Codex｜**v1.61 完成 ChatGPT Work 未能推送的 v1.59／v1.60，並修 Tesla／平板選角版面**：①**接手來源**：Work「網站問題處理」聲稱完成 `bd890b5`（v1.59 選角操作列遮卡修正）與 `bdba6c6`（v1.60 翻牌直接進原比例動畫），但 GitHub App 403 後兩個 commit 既不在本機也不在遠端物件庫，無法 cherry-pick；本版依 Work 明列的行為在正式 v1.58 基線逐項重建。②**直接進影片**：刪除 DOM `#pick-face-art`、`waitPoster()` 與每次點擊的 `card/*.webp` 中繼請求；`prepareReveal()` 先讓 wait 片進到可播放首幀，卡牌才開始翻，rotateY(90deg) 中點由 `revealPrepared()` 一次接手並從 0 秒播放，CSS 維持 `object-fit:contain`，720×1270 原比例不再先壓扁方圖再放大。失敗時只用已快取的 240×322 頭像後備，且後備也等到同一個 90° 揭露點。③**連點／4G**：preview generation＋player token＋「最新請求 `currentId`／真正上畫面的 `visibleId`」分離保證 last-wins；新增獨立 prime generation 與 `cancelPrime()`，loading／pending buffer 禁止被 pointer 預熱覆寫，pointercancel／滑出立即釋放未採用 standby，畫面最多目前影片＋1 個 standby；iOS 拒播 deferred 影片時不再改寫 active buffer，只有 240×322 後備頭像確實解碼後才容許翻走卡背；角色 BGM 延到影片真正揭露後才啟動，冷 4G 先把頻寬交給玩家正在等的影片。④**平板根因**：`aaa.css` 後載入的 mobile-first 單欄值蓋掉 `ornate.css` 的 ≥700px 雙欄，造成 768×1024／1024×768 時舞台高度變 0、四欄卡片撐出 viewport；在最後一層補回明確 tablet override，並把 `.pick-arena` 改為 header／main／footer 三列 grid，底部按鈕永遠有自己的列。⑤**Tesla 車機**：針對近期可能只有約 773×601 CSS px 的寬低視窗新增 compact landscape 規則，保留左影片／右 4 欄／底部 44px 操作；實測 773×601 無水平／垂直溢位、14 張中心 hit-test 全通過。⑥**單一惡魔魔王收尾**：把一元素陣列＋`Math.random()`／`arrivalUsed` 死狀態收成 `BOSS_ARRIVAL` 常數；manifest 刪除 28 個早已不存在的 `final_golem`／`final_ember` 鍵，正式只留 14×5＝70 條；清掉 `[data-act="clash"]` 與 `battle.clash` 死規則／cue，`smoke_burst` 仍供 ACT 4 使用。⑦**驗證**：指定 `python3 -m http.server 8888 --bind 0.0.0.0`；390×844／660／480、768×1024、1024×768、773×601、1200×800、1920×1080 全部零頁面溢位、14 卡可點、角色區不碰 footer；快速連點聖騎士→暗夜精靈→龍騎士最後正確顯示龍騎士且僅兩個 `<video>`；點卡後玩家圓點仍未鎖，按「決定」才寫入，confirm 為 1×、約 3.1 秒後換下一位；兩人魔王討伐完整 act `gather→arrival→attack→fate→reveal→attack→victory→result`，沒有 clash／ref_battle 請求，console error 0、HTTP 4xx 0。⑧**底線**：`js/rng.js` 未修改，SHA-256 仍為 `9ab55a96f19f162c1380a06cc7b3f2d496fb088aa393d570afeef7ef662f021a`；`startMode()` 仍先 `seedRun()` 定案，再做重玩時的降臨片預熱。快取：revamp.css?v=39、aaa.css?v=20、videoPlayer.js?v=33、audioDirector.js?v=22、game.js?v=37；印記 `v1.61 · 0830-1606`。
 
 - 2026-08-26｜Claude Code｜**v1.58 選角翻牌的卡面從 293KB 的 PNG 換成 27KB 的 WebP**：①睿哥錄了一段 6.32 秒的螢幕錄影說「也太卡了吧」。**先量再修**：把 60fps 的錄影逐幀算像素差，**81% 的畫面是靜止的**，最長一次凍結 **1733ms**（第 1.67s→3.40s），另外還有 517／467／400ms 幾段。畫面是選角頁，他在快速連點角色。②**根因**：v1.56 的翻牌卡面 `waitPoster()` 指向 `assets/heroes/${id}.png` —— 那批圖是 **512×512 無透明的 RGB，一張 293KB**，而卡面是**每點一個角色就換一次**的熱路徑。連點六隻等於硬拉近 1.8MB。（原本的選角頁只用 14KB 的縮圖，是 v1.56 的新版面才踩到這裡。）③**修法**：`tools/gen_hero_cards.py` 把 14 張轉成 `assets/heroes/card/*.webp`，**4.01MB → 371KB（-91%）**，單張 293KB → 27KB。並排比對看不出差別（平均像素差 1.54/255）。`waitPoster()` 與結果頁的 `heroImg()` 都改吃 WebP。**原本的 PNG 不刪** —— `victoryFilm.js`／`spritePlayer.js`／`characterStage.js`／`frameAnimator.js` 還在用，那幾條不是熱路徑。④版本表新增 `assets/heroes/card/*.webp` 這條比對規則（熱路徑一定要進逐檔表，換圖時才只重抓那一張）；228 條、雜湊全對。⑤**實測**（連點 6 個角色）：卡面下載從約 1.8MB 降到 **324KB**。⑥**⚠️ 一個差點誤報的發現**：量到「每支等待影片都被抓兩次」，看起來像重大 bug —— 但查證後是**本機 `python3 -m http.server` 對 Range 請求回 200 全檔**造成的假象（CLAUDE.md 早就寫過這條），GitHub Pages 會正確回 206。**沒有這個 bug，不要照著去修。**⑦**剩下的大宗是等待影片本身**：14 支合計 5.4MB、中位數 390KB、最大 687KB（paladin），分布平均、沒有可以無痛砍掉的離群值。要再降只有兩條路，都需要睿哥點頭：(a) 重壓那批影片（動到他的素材）(b) 連點時延後載入影片（碰 videoPlayer 的既有邏輯，有風險）。⑧快取：game.js?v=35→36、版本表 1c56726667；印記 `v1.58 · 0826-2140`。
 

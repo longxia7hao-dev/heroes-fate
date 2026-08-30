@@ -271,7 +271,7 @@
     return `${path}?v=${window.HF_ASSET_V?.[path] || ART_VERSION}`;
   }
 
-  /** 結果頁立繪。同樣改吃 WebP —— 理由見下面的 waitPoster()。 */
+  /** 結果頁立繪使用輕量 WebP；選角翻牌本身直接顯示 Sora 影片。 */
   function heroImg(id) {
     return artUrl(`assets/heroes/card/${id}.webp`);
   }
@@ -336,20 +336,6 @@
   let pickFlipWait = null;
   let pickFlipQueued = null;
 
-  /**
-   * 選角翻牌的卡面。
-   *
-   * ⚠️ **一定要用 `card/*.webp`，不要指回 `assets/heroes/*.png`。**
-   * 那批 PNG 是 512×512 無透明的 RGB，一張就 **293KB**；卡面是**每點一個角色
-   * 就換一次**的熱路徑，睿哥實測 6 秒內點過六隻，等於硬拉了近 2MB，
-   * 螢幕錄影量到 81% 的畫面是靜止的、最長凍結 1.7 秒。
-   * 同一張圖轉成 WebP 只要 **27KB（-91%）**，並排比對看不出差別
-   *（平均像素差 1.54/255）。轉檔工具：`tools/gen_hero_cards.py`。
-   */
-  function waitPoster(id) {
-    return artUrl(`assets/heroes/card/${id}.webp`);
-  }
-
   function waitMs(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
@@ -372,37 +358,23 @@
     });
   }
 
-  function preloadPoster(id) {
-    if (!id) return Promise.resolve();
-    return new Promise((resolve) => {
-      const img = new Image();
-      const done = () => resolve();
-      img.onload = done;
-      img.onerror = done;
-      img.src = waitPoster(id);
-      setTimeout(done, 160);
-    });
-  }
-
   function showPickContent({ back = false, heroId = null } = {}) {
-    const art = $("#pick-face-art");
     const backImg = $("#pick-face-back");
     if (back) {
       if (backImg) backImg.hidden = false;
-      if (art) art.hidden = true;
       $("#sprite-stage")?.classList.remove("is-live");
-      return;
+      return true;
     }
-    if (backImg) backImg.hidden = true;
-    if (art && heroId) {
-      art.hidden = false;
-      art.src = waitPoster(heroId);
-    }
+    const revealed = !!pickVideo?.revealPrepared?.(heroId);
+    // 只有下一支影片／後備頭像已真的接手，才把卡背拿掉；任何稀有載入
+    // 失敗都寧可保留完整卡背，不留下透明空框。
+    if (revealed && backImg) backImg.hidden = true;
+    return revealed;
   }
 
   function revealPickVideoIfReady() {
     const id = state.selectedHeroId || state.players[state.pickIndex]?.heroId;
-    if (id && pickVideo?.currentId === id) {
+    if (id && pickVideo?.visibleId === id) {
       $("#sprite-stage")?.classList.add("is-live");
     }
   }
@@ -427,12 +399,14 @@
     pickFlipping = true;
     pickFlipWait = (async () => {
       try {
-        if (heroId) await preloadPoster(heroId);
         card.classList.remove("is-in-from", "no-anim");
         card.classList.add("is-out");
         await waitTransform(card, 300);
-        showPickContent({ back, heroId });
-        $("#sprite-stage")?.classList.remove("is-live");
+        // 快速連點時，只允許最後一位選中的角色在 90° 中點換上。
+        const activeId = state.selectedHeroId || state.players[state.pickIndex]?.heroId || null;
+        if (back || !heroId || heroId === activeId) {
+          showPickContent({ back, heroId });
+        }
         card.classList.add("no-anim");
         card.classList.remove("is-out");
         card.classList.add("is-in-from");
@@ -529,6 +503,13 @@
   function bindHeroCards(root) {
     if (!root || root.dataset.hfBound === "1") return;
     root.dataset.hfBound = "1";
+    let primedPointerId = null;
+
+    const cancelPointerPrime = () => {
+      if (!primedPointerId) return;
+      primedPointerId = null;
+      pickVideo?.cancelPrime?.();
+    };
 
     // 手指壓下的那一刻就把頻寬交給眼前這支，不再背景掃完整個角色名冊。
     root.addEventListener("pointerdown", (event) => {
@@ -536,12 +517,18 @@
       if (!btn || !root.contains(btn) || btn.disabled || pickBusy) return;
       const id = btn.dataset.id;
       if (!id) return;
+      primedPointerId = id;
       ensurePickVideo()?.prime?.(id, "wait")?.catch?.(() => {});
-      try {
-        const img = new Image();
-        img.decoding = "async";
-        img.src = waitPoster(id);
-      } catch (_) {}
+    }, { passive: true });
+
+    // 手指滑開／系統把這次點擊改判為捲動時，立刻釋放沒要看的 standby；
+    // 正常 pointerup 只清記號，隨後 click 會直接接手同一支已預熱影片。
+    root.addEventListener("pointercancel", cancelPointerPrime, { passive: true });
+    root.addEventListener("pointerleave", (event) => {
+      if (event.buttons) cancelPointerPrime();
+    }, { passive: true });
+    root.addEventListener("pointerup", () => {
+      primedPointerId = null;
     }, { passive: true });
 
     root.addEventListener("click", (event) => {
@@ -643,11 +630,17 @@
       return null;
     }
     pickVideo = window.HF_VideoPlayer.create(el, {
-      onShown: () => {
+      onShown: (shownId) => {
         const pedestal = $("#screen-pick .model-pedestal");
         pedestal?.classList.remove("is-empty");
         pedestal?.classList.add("is-flipped");
         revealPickVideoIfReady();
+        const activeId = state.selectedHeroId || state.players[state.pickIndex]?.heroId;
+        // 先把玩家正在等的 Sora 首幀揭開，再啟動該角色 BGM，避免兩個
+        // 145KB/數百 KB 請求在冷 4G 上搶同一個開場時機。
+        if (shownId && shownId === activeId) {
+          window.HF_Audio?.playHeroMusic?.(shownId);
+        }
       },
       onHide: () => {
         $("#sprite-stage")?.classList.remove("is-live");
@@ -695,24 +688,27 @@
     }
 
     $("#screen-pick")?.style.setProperty("--hero-accent", h.color || "#90caf9");
-    window.HF_Audio?.playHeroMusic?.(h.id);
     if (job) job.textContent = h.name;
     if (weapon) weapon.textContent = h.weapon;
     if (flavor) flavor.textContent = `「${h.flavor}」`;
 
     const vp = ensurePickVideo();
     if (vp && gen === previewGen) {
-      if (vp.currentId === h.id && $("#sprite-stage")?.classList.contains("is-live")) return;
+      if (vp.visibleId === h.id && $("#sprite-stage")?.classList.contains("is-live")) return;
       pedestal?.classList.remove("is-empty");
       pedestal?.classList.add("is-flipped");
       try {
-        await flipPickCard({ heroId: h.id });
+        // 先讓 wait 片真正進到第一幀；卡牌仍保持原畫面。只有就緒後才翻，
+        // 並在 rotateY(90deg) 的中點一次換上影片，避免 512×512 方圖被拉寬。
+        let ready = await vp.prepareReveal?.(h.id, "wait");
         if (gen !== previewGen) return;
-        await vp.play(h.id, "wait");
+        if (!ready) ready = await vp.prepareFallback?.(h.id);
+        if (gen !== previewGen) return;
+        // 影片與後備圖都失敗時保留完整卡背，不做一次只會露出空框的翻牌。
+        if (ready) await flipPickCard({ heroId: h.id });
       } catch (e) {
         console.warn("preview play failed", e);
       }
-      if (gen === previewGen) revealPickVideoIfReady();
     }
   }
 
@@ -1198,36 +1194,23 @@
     } catch (_) {}
   }
 
-  /**
-   * 魔王名冊。只留原版惡魔魔王，不再輪換獨眼魔像／熔岩魔女。
-   */
-  const BOSS_ARRIVALS = [
-    { id: "demon", name: "魔王", nameEn: "DEMON LORD", src: "assets/videos/mobile/boss/arrival.mp4", poster: "assets/videos/poster/boss/arrival.jpg" },
-  ];
-  /** 這一局選中的魔王。 */
-  let currentArrival = BOSS_ARRIVALS[0];
+  /** 唯一正式魔王：原版惡魔。已停用的魔像／熔岩魔女不再保留輪換狀態。 */
+  const BOSS_ARRIVAL = Object.freeze({
+    id: "demon",
+    name: "魔王",
+    nameEn: "DEMON LORD",
+    src: "assets/videos/mobile/boss/arrival.mp4",
+    poster: "assets/videos/poster/boss/arrival.jpg",
+  });
+  // 保留測試鉤子的相容介面；現在只有 demon 是合法值，也不改動任何狀態。
   window.HF_setBoss = (id) => {
-    const pick = BOSS_ARRIVALS.find((b) => b.id === id);
-    if (!pick) return false;
-    currentArrival = pick;
-    arrivalUsed = false;
-    return pick.id;
+    return id === BOSS_ARRIVAL.id ? BOSS_ARRIVAL.id : false;
   };
-  /**
-   * 這隻是不是已經被某一局用掉了。
-   *
-   * ⚠️ **這個旗標是為了「再來一局」存在的。** 抽籤原本只寫在「進模式頁」，
-   * 但 `#btn-replay` 是**直接呼叫 `startMode()`、不經過模式頁**的 ——
-   * 於是重玩幾次都還是第一次抽到的那隻，睿哥實測「怎麼都沒有新增的魔物出現」
-   * 就是這樣來的。現在改成：進模式頁先抽一次（爭取預抓時間），
-   * 而 `startMode()` 發現上一隻已經用過就**重抽**。
-   */
-  let arrivalUsed = false;
 
   /**
    * 魔王降臨片（0.6–1.4MB）在選模式那一頁就開始抓：ACT2 一到就要播，
    * 等到那一刻才下載，4G 上必定卡住或整段被跳過。
-   * **抽魔王也在這裡** —— 抽完才知道要預抓哪一支，不然會抓錯白花流量。
+   * 現在只有惡魔一隻，因此重複呼叫只沿用同一個有界預抓元素。
    */
   let arrivalPrefetch = null;
   function releaseArrivalPrefetch() {
@@ -1236,12 +1219,8 @@
   }
 
   function prefetchArrivalClip() {
-    const pick = BOSS_ARRIVALS[Math.floor(Math.random() * BOSS_ARRIVALS.length)];
-    arrivalUsed = false;
-    if (arrivalPrefetch && pick.src === currentArrival.src) return;
-    // 換人了就把上一支放掉，不要留著佔記憶體與流量
-    releaseArrivalPrefetch();
-    currentArrival = pick;
+    if (arrivalPrefetch) return;
+    const pick = BOSS_ARRIVAL;
     try {
       const url = pick.src;
       const el = document.createElement("video");
@@ -1585,9 +1564,6 @@
 
   function startMode(mode, opts = {}) {
     if (state.presenting) return;
-    // 「再來一局」不經過模式頁，所以重抽要放在這裡，否則每局都是同一隻魔王
-    if (arrivalUsed) prefetchArrivalClip();
-    arrivalUsed = true;
     state.mode = mode;
     if (opts.teamCount) state.teamCount = opts.teamCount;
     state.skip = false;
@@ -1601,6 +1577,9 @@
       teamCount: state.teamCount,
       useFateCard: state.opts.fateCard,
     });
+    // 「再來一局」不經過模式頁；一定先由 seedRun 把公平結果完整定案，
+    // 才補回唯一惡魔的降臨片預熱。媒體下載只服務演出，不參與 RNG。
+    if (!arrivalPrefetch) prefetchArrivalClip();
     const result = state.run.result || {};
     const battleMode = result.mode === "boss" || result.mode === "doom";
     const winnerId = result.winner?.heroId || result.survivor?.heroId || null;
@@ -2219,12 +2198,11 @@
 
     // === ACT 2: 魔王降臨。就是這支影片，沒有別的演出 ===
     // 睿哥指定：拿掉「魔王小圖飛進來撞擊」那套設計（立繪 enter + impactFx），
-    // 也不要在影片播完後把小圖砸上來。魔王立繪從 ACT 3A 才進場。
+    // 也不要在影片播完後把小圖砸上來；降臨片結束後直接接英雄攻擊。
     setAct("arrival");
     stage.classList.add("dark");
-    // 這一局的魔王在進模式頁時就抽好了（見 prefetchArrivalClip），
-    // 所以預抓的跟現在要播的一定是同一支。
-    const arrival = currentArrival;
+    // 唯一魔王的 poster／影片／後續名稱皆取自同一份常數。
+    const arrival = BOSS_ARRIVAL;
     setBanner(isDoom ? `${arrival.name}降臨——它要挑一個人帶走` : `${arrival.name}降臨！！`);
     let roarTimer = 0;
     stage.classList.add("can-tap");
@@ -2280,15 +2258,14 @@
      *   - `assets/ref_battle_mobile.mp4`（Codex 才在 v1.47 納入版控修 404，
      *     現在沒人用了，照專案鐵則「只收實際在用的素材」刪掉。
      *     要復原的話原片還在睿哥 Mac 的 `assets/ref_battle.mp4`，那支是 .gitignore 的）
-     *   - `revamp.css` 的 `[data-act="clash"]` 幾條規則變成死規則，**先留著**：
-     *     `clash` 這個 act 名稱沒別人用，留著不影響任何畫面，
-     *     真要清也該連同 `audioDirector.js` 的 `battle.clash` 一起，另外開一次。
+     *   - 舊 `[data-act="clash"]` 視覺規則與 `battle.clash` cue 已於 v1.61
+     *     一併清除；`smoke_burst` 素材仍由後面的 `smoke.burst` 使用。
      *
      * HUD 不必在這裡補建 —— ACT 2 的 `renderBattleHud(players)` 已經建好，
      * `playAttackSequence()` 每一位攻擊時還會再更新 active。
      */
 
-    // === ACT 3B: 各角色的攻擊動畫一支接一支連播，中間不插打擊演出（避免割裂感） ===
+    // === ACT 3: 各角色的攻擊動畫一支接一支連播，中間不插打擊演出（避免割裂感） ===
     setAct("attack");
     await playAttackSequence(players, attackSources, { winnerId: wh?.id });
     warmFateCircleAssets();

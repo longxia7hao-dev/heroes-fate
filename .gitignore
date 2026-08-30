@@ -8,8 +8,6 @@ assets/anim/
 
 # 參考片（高碼率原片，程式沒有引用）
 assets/ref_battle.mp4
-# 注意：ref_battle_mobile.mp4 不在這裡 —— 它是 ACT 3A「全軍突擊」正式使用的手機版短片
-# （js/game.js 的 playStageClip 有引用），必須納入版控，否則 GitHub Pages 上會 404。
 
 # macOS / Python
 .DS_Store
