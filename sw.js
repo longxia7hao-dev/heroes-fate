@@ -14,17 +14,31 @@
  *    比對不出來就永遠不會跳「有新版本 · 點一下更新」。它已經帶時間戳＋
  *    `no-store`，這裡再明確放行一次，確保任何情況下都拿得到真正的線上值。
  *
- * 2. **`.mp4`** —— 影片是 `<video>.src` 在放，**Safari 會送 Range 請求**。
- *    Service Worker 若把完整的 200 回應丟給 Range 請求，iOS 上會出問題；
- *    這個專案在 v1.2.1 就因為「Range 被回 200 而不是 206」讓音訊整個播不出來
- *    （CLAUDE.md 有記）。影片快取要等**第二階段**做成 range-aware 才安全，
- *    在那之前寧可不快取，也不要冒「影片完全播不出來」的風險。
+ * 2. **任何帶 `Range` 標頭、而且不是影片的請求** —— 放行給瀏覽器自己處理。
  *
- *    ⚠️ 音效（`.mp3`）則相反，**可以安全快取** —— `audioDirector.js` 是用
- *    `fetch()` ＋ `decodeAudioData()` 抓的，不是 `<audio>` 元素，不會送 Range。
+ *    ⚠️ 音效（`.mp3`）可以安全快取 —— `audioDirector.js` 是用 `fetch()` ＋
+ *    `decodeAudioData()` 抓的，不是 `<audio>` 元素，不會送 Range。
  *    那 4.4MB 的角色 BGM 與音效因此全部進得了快取。
  *
- * 3. **任何帶 `Range` 標頭的請求** —— 同上，一律放行給瀏覽器自己處理。
+ * ── 影片：v1.69 起改成 range-aware 快取（原本完全不快取）────────────
+ *
+ * **為什麼一開始不敢碰**：影片是 `<video>.src` 在放，**Safari 會送 Range 請求**。
+ * Service Worker 若把完整的 200 回應丟給 Range 請求，iOS 上會出問題 ——
+ * 這個專案在 v1.2.1 就因為「Range 被回 200 而不是 206」讓音訊整個播不出來
+ *（CLAUDE.md 有記）。所以 v1.62 先整個放行，把 range-aware 留到第二階段。
+ *
+ * **為什麼現在非做不可**：一場 4 人魔王討伐要抓約 **9.7MB** 影片
+ *（選角 4×398K ＋ 確認 4×511K ＋ 魔王降臨 1.4M ＋ 攻擊 4×626K ＋ final 1.8M ＋ 勝利 581K），
+ * 而且**每一場都重抓一次**。睿哥是弱訊號 4G，這就是「影片載入超慢」的根因。
+ * 重壓碼率只省得到約 30%（實測 final 只小 6%），差得遠。
+ *
+ * **做法**：快取裡永遠存**完整的 200**（用不帶 Range 的請求去抓），
+ * 要回應 Range 時**自己切出 206 ＋ 正確的 `Content-Range`／`Accept-Ranges`** ——
+ * v1.2.1 的災情是「Range 被回 200」，這裡回的是貨真價實的 206，正是 iOS 要的。
+ *
+ * **第一次播不會變慢**：快取沒中時**直接放行走網路**（維持漸進播放），
+ * 只在背景補快取，而且背景那次用 `cache: "force-cache"` 優先吃瀏覽器自己的
+ * HTTP 快取 —— 檔案幾秒前才剛下載過，幾乎不會真的多花流量。
  *
  * ── 兩個獨立的快取，這點很重要 ────────────────────────────
  *
@@ -44,7 +58,12 @@
 
 const SHELL = "hf-shell-v2";
 const MEDIA = "hf-media-v2";
-const KEEP = new Set([SHELL, MEDIA]);
+const VIDEO = "hf-video-v1";
+const KEEP = new Set([SHELL, MEDIA, VIDEO]);
+
+// 影片桶最多留幾支。`cache.keys()` 回傳的是**插入順序**，超過就從最舊的開始砍。
+// 45 支混著算平均約 30MB（等待／確認／攻擊約 0.4〜0.6MB，final 約 1.8MB）。
+const VIDEO_KEEP = 45;
 
 self.addEventListener("install", () => {
   // 不預先下載任何東西：睿哥是弱訊號 4G，安裝當下再去搶頻寬只會讓第一次更慢。
@@ -120,12 +139,78 @@ async function networkFirst(request) {
   }
 }
 
+/** 把 Range 標頭拿掉之後的請求 —— 快取一律用這個當 key，存的永遠是完整檔案。 */
+function fullKey(url) {
+  return new Request(url, { headers: {}, mode: "same-origin", credentials: "omit" });
+}
+
+/** 背景補快取。用 force-cache 優先吃瀏覽器自己的 HTTP 快取，避免真的多抓一次。 */
+async function fillVideoCache(url) {
+  const cache = await caches.open(VIDEO);
+  if (await cache.match(fullKey(url))) return;
+  try {
+    const res = await fetch(fullKey(url), { cache: "force-cache" });
+    if (!res || res.status !== 200 || res.type !== "basic") return;
+    await cache.put(fullKey(url), res.clone());
+    const keys = await cache.keys();
+    for (let i = 0; i < keys.length - VIDEO_KEEP; i++) await cache.delete(keys[i]);
+  } catch (_) {
+    /* 抓不到就算了，下次再說 */
+  }
+}
+
+/**
+ * 影片回應。**這裡是整個 SW 最需要小心的地方。**
+ *
+ * 快取裡存的永遠是完整的 200。Safari 會對 `<video>` 送 Range 請求，
+ * 這時**必須自己切出 206**，附上正確的 `Content-Range` 與 `Accept-Ranges` ——
+ * 直接把完整的 200 丟回去正是 v1.2.1 讓 iOS 音訊全滅的那個 bug，不要重蹈。
+ *
+ * 快取沒中時**不攔**（回 null，交給瀏覽器直接走網路），第一次播維持漸進播放、
+ * 速度跟以前一模一樣；同時在背景把完整檔案補進快取，第二次以後就是本機讀取。
+ */
+async function videoResponse(request) {
+  const cache = await caches.open(VIDEO);
+  const hit = await cache.match(fullKey(request.url));
+  if (!hit) return null;
+
+  const range = request.headers.get("range");
+  if (!range) return hit;
+
+  const buf = await hit.arrayBuffer();
+  const total = buf.byteLength;
+  const m = /^bytes=(\d*)-(\d*)/.exec(range.trim());
+  if (!m) return hit;
+  let start = m[1] ? parseInt(m[1], 10) : 0;
+  let end = m[2] ? parseInt(m[2], 10) : total - 1;
+  if (!m[1] && m[2]) {
+    // `bytes=-500` 是「最後 500 bytes」，不是「0 到 500」
+    start = Math.max(0, total - parseInt(m[2], 10));
+    end = total - 1;
+  }
+  if (!Number.isFinite(start) || start >= total || start < 0) {
+    return new Response(null, {
+      status: 416,
+      headers: { "Content-Range": `bytes */${total}`, "Accept-Ranges": "bytes" },
+    });
+  }
+  end = Math.min(end, total - 1);
+
+  return new Response(buf.slice(start, end + 1), {
+    status: 206,
+    statusText: "Partial Content",
+    headers: {
+      "Content-Type": hit.headers.get("content-type") || "video/mp4",
+      "Content-Length": String(end - start + 1),
+      "Content-Range": `bytes ${start}-${end}/${total}`,
+      "Accept-Ranges": "bytes",
+    },
+  });
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
-
-  // Range 請求（影片）一律不碰 —— 理由見檔頭
-  if (request.headers.has("range")) return;
 
   let url;
   try {
@@ -134,13 +219,30 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // 影片：range-aware 快取。**這一段一定要排在下面那條「Range 一律放行」之前**，
+  // 否則帶 Range 的影片請求會被先放行掉，快取永遠不會生效。
+  if (url.origin === self.location.origin && url.pathname.endsWith(".mp4")) {
+    event.respondWith(
+      videoResponse(request).then((res) => {
+        if (res) return res;
+        // 沒命中：這一次照舊走網路（保持漸進播放），背景把它補進快取
+        event.waitUntil(fillVideoCache(request.url));
+        return fetch(request);
+      }).catch(() => fetch(request))
+    );
+    return;
+  }
+
+  // 其餘帶 Range 的請求一律不碰 —— 交給瀏覽器自己處理
+  if (request.headers.has("range")) return;
+
   // 跨網域（Google Fonts 等）交給瀏覽器自己的 HTTP 快取。
   // 不攔的原因：跨網域樣式表拿到的是 opaque 回應，存進 Cache Storage 會以
   // 「補白」的方式吃掉大量配額，換來的好處卻很有限。
   if (url.origin !== self.location.origin) return;
 
-  // 版本探針與影片：永遠走網路
-  if (url.pathname.endsWith("/build.txt") || url.pathname.endsWith(".mp4")) return;
+  // 版本探針：永遠走網路（影片已在上面處理掉了）
+  if (url.pathname.endsWith("/build.txt")) return;
 
   // **影片清單絕對不能 cache-first。**
   // `assets/videos/manifest.json` 落在 `/assets/` 底下，會被分到 media 桶 ——
