@@ -139,6 +139,9 @@ async function networkFirst(request) {
   }
 }
 
+// 最近一支影片的完整 buffer。只留一支：播放時本來就是連續要同一支影片的不同段。
+let lastBuf = { url: null, buf: null };
+
 /** 把 Range 標頭拿掉之後的請求 —— 快取一律用這個當 key，存的永遠是完整檔案。 */
 function fullKey(url) {
   return new Request(url, { headers: {}, mode: "same-origin", credentials: "omit" });
@@ -186,7 +189,20 @@ async function videoResponse(request) {
   const range = request.headers.get("range");
   if (!range) return hit;
 
-  const buf = await hit.arrayBuffer();
+  // ⚠️ **每個 Range 請求都重新 `arrayBuffer()` 一次會很痛。**
+  // Safari 播一支影片會連續送很多段 Range，而 `arrayBuffer()` 的成本跟**檔案大小**
+  // 成正比（不是跟要的那一段）—— 實測 335K 的片每段 5.7ms，1.8M 的 final 每段
+  // 11.5ms（桌機 Chromium；手機還要再乘幾倍）。等於播 1.8M 的片就要反覆解出
+  // 24 次 1.8MB，記憶體與 CPU 都在空轉，播放就會頓。
+  // 只留最近一支的 buffer 就好 —— 播放時本來就是連續要同一支。
+  const cacheKey = fullKey(request.url).url;
+  let buf;
+  if (lastBuf.url === cacheKey && lastBuf.buf) {
+    buf = lastBuf.buf;
+  } else {
+    buf = await hit.arrayBuffer();
+    lastBuf = { url: cacheKey, buf };
+  }
   const total = buf.byteLength;
   const m = /^bytes=(\d*)-(\d*)/.exec(range.trim());
   if (!m) return hit;
@@ -244,7 +260,9 @@ self.addEventListener("message", (event) => {
     return;
   }
   if (data.type === "hf-warm" && Array.isArray(data.urls)) {
-    warmQueue = data.urls.filter((u) => typeof u === "string").slice(0, 40);
+    // 上限跟快取容量對齊（頁面現在送 43 支：魔王降臨 ＋ 等待 ＋ 確認 ＋ 攻擊）。
+    // 之前寫死 40，會把清單尾端的 3 支攻擊片默默切掉。
+    warmQueue = data.urls.filter((u) => typeof u === "string").slice(0, VIDEO_KEEP);
     runWarm();
   }
 });

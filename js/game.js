@@ -255,22 +255,36 @@
     }
     if (name === "count") warmPickAssets();
     if (name === "mode") prefetchArrivalClip();
-    // 影片快取只在主選單這種「玩家沒在等任何東西」的時候才補；
-    // 一離開主選單就叫停，絕對不跟演出搶頻寬（見 sw.js 的 hf-warm）。
-    warmWaitClipCache(name === "home");
+    // 影片快取只在「玩家沒在等任何東西」的時候才補：主選單，以及看結果的時候。
+    // 一離開就叫停，絕對不跟演出搶頻寬（見 sw.js 的 hf-warm）。
+    warmVideoCache(name === "home" || name === "result");
   }
 
   /**
-   * 請 Service Worker 把 14 支選角待機片（共約 5.4MB）一支一支存進本機。
+   * 請 Service Worker 在閒著的時候，把影片一支一支存進本機。
    *
    * **為什麼要有這個**：一場 4 人魔王討伐要抓約 9.7MB 影片，而 v1.62 之前
    * 影片完全沒有快取，每一場都重抓。v1.69 起 sw.js 可以 range-aware 地
    * 快取影片，但**補快取這件事只能在閒著的時候做** —— 播放中背景抓會直接
    * 跟串流搶頻寬（v1.69 就是這樣，實測邊播邊多抓一整支）。
    *
-   * 主選單是唯一安全的時機：玩家在看畫面、沒有任何演出在等網路。
+   * **順序是照「每一場會用到的機率」排的**，因為 sw.js 的快取有上限（45 支），
+   * 排前面的才留得住：
+   *   ① 魔王降臨 1.4M —— **每一場都播**，單支效益最高
+   *   ② 選角待機片 14 支 5.4M —— 選人時每個角色都會播
+   *   ③ 確認片 14 支 7.0M
+   *   ④ 攻擊切入 14 支 8.6M
+   * 合計 43 支約 22.4MB，剛好塞得進 45 支的上限。
+   *
+   * **勝利片與 final 故意不預熱**：final 一支就 1.8M、14 支共 24.6M，
+   * 一場只會播一支，硬要塞只會把上面那些每場都用得到的擠掉。
+   *
+   * 安全的時機只有兩個：主選單，以及看結果的時候 —— 玩家在讀畫面，
+   * 沒有任何演出在等網路。
    */
-  function warmWaitClipCache(on) {
+  const WARM_SCREENS = new Set(["home", "result"]);
+
+  function warmVideoCache(on) {
     const sw = navigator.serviceWorker;
     if (!sw?.controller) return;
     if (!on) {
@@ -279,14 +293,19 @@
     }
     Promise.resolve(window.HF_VideoPlayer?.loadManifest?.())
       .then((man) => {
-        // ⚠️ **這個 await 中間玩家可能已經離開主選單了。**
+        // ⚠️ **這個 await 中間玩家可能已經離開了。**
         // 不重新確認的話，`hf-warm-stop` 會先送到、清單後送到，等於叫停無效 ——
         // 實測就是這樣：人已經在選人數畫面，14 支還是全被抓下來了。
-        if (document.body.dataset.screen !== "home") return;
-        const urls = Object.values(man || {})
-          .map((m) => m?.wait)
-          .filter(Boolean)
-          .map((u) => window.HF_VideoPlayer.versioned(u));
+        if (!WARM_SCREENS.has(document.body.dataset.screen)) return;
+        const V = window.HF_VideoPlayer.versioned;
+        const heroes = Object.values(man || {});
+        const pick = (kind) => heroes.map((m) => m?.[kind]).filter(Boolean);
+        const urls = [
+          "assets/videos/mobile/boss/arrival.mp4",
+          ...pick("wait"),
+          ...pick("confirm"),
+          ...pick("attack"),
+        ].map(V);
         // controller 可能在這段 await 之間換掉，所以重新取一次
         if (urls.length) sw.controller?.postMessage({ type: "hf-warm", urls });
       })
