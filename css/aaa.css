@@ -801,3 +801,91 @@ html.in-app-chrome #screen-pick .pick-actions .btn {
   height: 100% !important;
   aspect-ratio: auto !important;
 }
+
+/* ── 主選單只留一個外框（v1.66）────────────────────────────────────
+ * 睿哥 2026-09-05：「主選單 logo 與外匡中間多了一個沒必要的小匡，取消掉」。
+ *
+ * **為什麼我在雲端一直重現不出來**：`#screen-home` 上有兩個框 ——
+ *   ① `.aaa-frame`：`inset: 0.32rem`，四邊一樣，**金色四角雕花掛在它身上**（要留）
+ *   ② `#screen-home::after`（revamp.css:262）：
+ *      `inset: max(0.55rem, env(safe-area-inset-top)) 0.55rem max(0.55rem, env(safe-area-inset-bottom))`
+ *
+ * headless Chromium **沒有瀏海，`env(safe-area-inset-*)` 全是 0**，
+ * `max(0.55rem, 0)` 就退回 0.55rem，兩個框只差 3.7px、幾乎疊在一起 ——
+ * 所以我掃 393px 與 1204px 都「只看到一個框」。
+ * 但在 iPhone 上安全區是 59px／34px，②會被推到**離頂端 59px 的地方**，
+ * 於是變成一圈明顯的第二個框，剛好橫穿 logo 上方。
+ * （把 `inset: 59px 8.8px 34px` 寫死進去模擬瀏海，就一次重現了。）
+ *
+ * 修法：②只留暈影，不再畫線，並且 `inset: 0` 讓暈影蓋滿整個畫面
+ * （否則暈影自己也會沿著安全區留下一道邊）。框線全部交給 `.aaa-frame`。
+ */
+#screen-home::after {
+  inset: 0 !important;
+  border: 0 !important;
+}
+
+/* ── 勝利字樣：照睿哥 2026-09-05 圖 1 的金色銘牌重做（v1.66）──────────
+ * 原本是一塊白字＋深色小方框（game.css:757 ／ revamp.css:2112），
+ * 跟參考圖那種「金色浮雕羅馬體 ＋ 紫色魔法輝光 ＋ 兩側捲葉」差很多。
+ *
+ * 全部用既有資源做，不新增任何素材：
+ *   - 字型用 `Cinzel`（index.html 早就載了），正好是參考圖那種羅馬體
+ *   - 金色是 `background-clip: text` 的六段漸層（亮金→白金高光→深琥珀），
+ *     跟參考圖同一個由上而下的走向
+ *   - 兩側捲葉直接沿用 `assets/ui/corner.webp`（v1.63 去過背的那張），
+ *     左右各一、鏡射對稱
+ *
+ * ⚠️ **輝光不能用 `text-shadow`** —— 字面是 `background-clip: text` 畫出來的，
+ * text-shadow 會沿著「原本的文字顏色」畫，而顏色已經是 transparent，什麼都不會出現。
+ * 改用 `filter: drop-shadow()`：它作用在合成完的字形輪廓上，金字才會發光。
+ * 副作用是連 ::before／::after 的捲葉也會一起發光 —— 那正好，本來就要金色泛光。
+ */
+.vf-title {
+  bottom: calc(3.2rem + env(safe-area-inset-bottom, 0px)) !important;
+  padding: 0.5rem 3.4rem 0.6rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  font-family: var(--font-display) !important;
+  font-size: clamp(2.15rem, 11.5vw, 3.3rem) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.1em !important;
+  line-height: 1 !important;
+  background:
+    linear-gradient(
+      180deg,
+      #ffeeb8 0%,
+      #ffd469 20%,
+      #fff8e2 44%,
+      #f3b241 60%,
+      #bd7b1e 86%,
+      #8c5011 100%
+    ) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  text-shadow: none !important;
+  filter:
+    drop-shadow(0 1px 0 #5a3208)
+    drop-shadow(0 0 9px rgba(255, 206, 92, 0.6))
+    drop-shadow(0 0 26px rgba(168, 85, 247, 0.8))
+    drop-shadow(0 6px 14px rgba(0, 0, 0, 0.7));
+}
+/* 兩側金線：跟首頁標題下那條 `.aaa-rule` 同一個語彙（尖角收尾的金條）。
+ * **試過拿 `corner.webp` 當兩側捲葉，轉 45° 之後像兩隻黑蛾，看起來很糟** ——
+ * 那張是「直角轉角」的構圖，斜著擺就散了。改用尖角金線乾淨得多。 */
+.vf-title::before,
+.vf-title::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: clamp(26px, 7vw, 46px);
+  height: 8px;
+  margin-top: -4px;
+  background: linear-gradient(90deg, transparent, rgba(255, 212, 120, 0.95) 55%, rgba(255, 240, 200, 1));
+  clip-path: polygon(0 50%, 22% 0, 100% 0, 100% 100%, 22% 100%);
+  pointer-events: none;
+}
+.vf-title::before { left: 0.35rem; }
+.vf-title::after { right: 0.35rem; transform: scaleX(-1); }
