@@ -327,6 +327,10 @@ html, body {
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.04em;
+  /* 「鎖定中…／點一下跳過」是兩行（videoPlayer.js 送 \n 進來），兩行都要置中 */
+  text-align: center;
+  white-space: pre-line;
+  line-height: 1.35;
   pointer-events: none;
   box-shadow: 0 4px 16px #0008;
 }

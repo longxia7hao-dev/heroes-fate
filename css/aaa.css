@@ -757,3 +757,47 @@ html.in-app-chrome #screen-pick .pick-actions .btn {
     animation: none !important;
   }
 }
+
+/* ── 角色選擇：框、卡背、動畫三者同一個尺寸，中間不留黑邊（v1.65）────────
+ * 睿哥 2026-09-05：「卡片及動畫旁邊的黑邊不要有！匡應該與角色動畫匡相同大小！
+ * 包含卡片背面的圖示也是要一樣大小！如同真的卡片翻牌一樣」
+ *
+ * 黑邊是量出來的，不是猜的：
+ *   - 框 `.model-pedestal` 是 aspect-ratio 2/3（0.667），卡背 card_back.webp
+ *     320×480 也剛好 2/3 —— 這兩個本來就一樣大。
+ *   - 等待片 14 支裡有 13 支是 720×1270（0.567），只有 dragon_knight 是 720×1080。
+ *   - 原本走 `object-fit: contain`，0.567 的片塞進 0.667 的框，左右各空 7.5%，
+ *     露出 `.pick-card` 的底色 #12081e —— 那就是睿哥圈起來的黑邊。
+ *     （revamp.css 本來畫了石雕側柱去填那兩條空隙，但 aaa.css 把 ::before 關掉了，
+ *      於是只剩黑色。）
+ *
+ * 改成 cover：直向裁掉 190px，object-position 55% ＝ 上裁 104／下裁 86。
+ * 實測 knight 的角色落在 y≈380〜1100，頭頂與腳下都還在框內，沒有切到人。
+ * dragon_knight 是 720×1080（正好 2/3），cover 完全不裁。
+ * 順便把 scale(1.08) 拿掉 —— 那本來就是為了「少露一點黑邊」而放大的補丁，
+ * cover 之後沒有黑邊可補，繼續放大只會多裁掉 8%（knight 的劍尖就在邊上）。
+ *
+ * 一定要 `!important`：revamp.css 那條 `#screen-pick :is(.vp-video, .vp-still)`
+ * 自己就帶 !important，同選擇器權重下不加就蓋不過去。
+ */
+#screen-pick :is(.vp-video, .vp-still),
+#screen-pick .vp-root.vp-confirm :is(.vp-video, .vp-still) {
+  object-fit: cover !important;
+  object-position: center 55% !important;
+  transform: none !important;
+  background: transparent !important;
+}
+
+/* 靜圖退路（`.vp-still`）也要回到「整格填滿」。
+ * revamp.css:1610 把它做成 `left:50%; width:auto; aspect-ratio:720/1270;
+ * transform:translateX(-50%)` 的一條窄帶 —— 那是為了讓它剛好站在兩隻石龍側柱
+ * 中間。但 aaa.css 已經把 `.model-pedestal::before`（石龍）關掉了，窄帶留著
+ * 只會在左右各留一條黑。上面那條把 transform 清成 none，若不一併把 left/width
+ * 收回來，靜圖會被 left:50% 推到右邊、還會超出框外（實測 216.5px 寬、右緣 413 > 393）。 */
+#screen-pick .vp-still {
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  aspect-ratio: auto !important;
+}

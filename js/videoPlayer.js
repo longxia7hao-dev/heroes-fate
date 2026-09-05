@@ -646,7 +646,9 @@ window.HF_VideoPlayer = (() => {
         const onError = () => finish();
 
         const baseBadge = playKind === "confirm" ? "鎖定中…" : "播放中…";
-        setBadge(tapSkip ? `${baseBadge}　點一下跳過` : baseBadge);
+        // 換行而不是全形空白：擠在同一行時「點一下跳過」會被框寬折成很醜的位置。
+        // `.vp-badge` 有 white-space: pre-line + text-align: center 接這個 \n。
+        setBadge(tapSkip ? `${baseBadge}\n點一下跳過` : baseBadge);
         root.classList.toggle("vp-confirm", playKind === "confirm");
         setState("confirm-loading");
         timer = setTimeout(finish, maxTotalMs);
