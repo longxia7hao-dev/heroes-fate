@@ -65,6 +65,10 @@ const KEEP = new Set([SHELL, MEDIA, VIDEO]);
 // 45 支混著算平均約 30MB（等待／確認／攻擊約 0.4〜0.6MB，final 約 1.8MB）。
 const VIDEO_KEEP = 45;
 
+// 影片要不要走 Service Worker 快取。見下面 fetch handler 裡的長註解 ——
+// 在 iPhone 上驗證過選角翻牌之前，不要打開。
+const VIDEO_CACHE = false;
+
 self.addEventListener("install", () => {
   // 不預先下載任何東西：睿哥是弱訊號 4G，安裝當下再去搶頻寬只會讓第一次更慢。
   // 改成「用到什麼就存什麼」，第二次開啟就已經是本機讀取了。
@@ -260,6 +264,8 @@ self.addEventListener("message", (event) => {
     return;
   }
   if (data.type === "hf-warm" && Array.isArray(data.urls)) {
+    // 快取關著的時候不要預熱 —— 存了也不會有人讀，純粹白吃 22MB 的 4G 流量
+    if (!VIDEO_CACHE) return;
     // 上限跟快取容量對齊（頁面現在送 43 支：魔王降臨 ＋ 等待 ＋ 確認 ＋ 攻擊）。
     // 之前寫死 40，會把清單尾端的 3 支攻擊片默默切掉。
     warmQueue = data.urls.filter((u) => typeof u === "string").slice(0, VIDEO_KEEP);
@@ -280,7 +286,22 @@ self.addEventListener("fetch", (event) => {
 
   // 影片：range-aware 快取。**這一段一定要排在下面那條「Range 一律放行」之前**，
   // 否則帶 Range 的影片請求會被先放行掉，快取永遠不會生效。
-  if (url.origin === self.location.origin && url.pathname.endsWith(".mp4")) {
+  //
+  // ⚠️⚠️ **2026-09-05 起預設關閉（`VIDEO_CACHE = false`）。**
+  // 睿哥回報「選角時卡片不會反轉，也沒有角色待命影片」—— 翻牌是等待機片
+  // 第一幀（`playing` 事件）才觸發的，所以那代表影片在 iOS 上根本沒就緒。
+  // 這條路徑正是當時唯一的新變數。
+  //
+  // **iOS Safari 讓 `<video>` 走 Service Worker 一向不可靠**（媒體請求有時
+  // 根本不進 SW，有時進了又對合成的回應處理得很怪），而**這個環境沒有 Safari
+  // 可以驗證** —— headless Chromium 連 H.264 都解不了。我用 VP9/WebM 測過，
+  // 在 Chromium 上完整可播（未快取 canplay 42ms、走快取 20ms／17ms），
+  // 但那**證明不了 Safari 也可以**。
+  //
+  // 影片快取只是加速；選角畫面壞掉是功能故障。在拿不到 Safari 實證之前，
+  // 一律讓影片走回瀏覽器自己的路。要重新開啟就把這個常數改成 true，
+  // 但**務必先在真的 iPhone 上驗過選角翻牌**。
+  if (VIDEO_CACHE && url.origin === self.location.origin && url.pathname.endsWith(".mp4")) {
     event.respondWith(
       videoResponse(request)
         // 沒命中就直接走網路，**而且什麼都不做**。
