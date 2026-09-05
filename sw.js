@@ -144,12 +144,21 @@ function fullKey(url) {
   return new Request(url, { headers: {}, mode: "same-origin", credentials: "omit" });
 }
 
-/** 背景補快取。用 force-cache 優先吃瀏覽器自己的 HTTP 快取，避免真的多抓一次。 */
+/**
+ * 把一支影片完整存進快取。**只在 `warm` 訊息（主選單閒著時）被呼叫**，
+ * 絕對不要在播放中做 —— 見下面 fetch handler 的說明。
+ *
+ * ⚠️ **不要用 `cache: "force-cache"` 想省流量。** v1.69 我這樣寫過，以為
+ * 「檔案幾秒前才串流過，HTTP 快取裡一定有」—— 錯了：`<video>` 是用 Range 抓的，
+ * GitHub Pages 正確回 **206**，瀏覽器的 HTTP 快取裡只有半截，`force-cache` 命不中，
+ * 還是會整支重抓。（本機 `python3 -m http.server` 對 Range 回的是 200，
+ * 所以本機測起來「只抓一次」是假象 —— 一定要用會回 206 的伺服器測。）
+ */
 async function fillVideoCache(url) {
   const cache = await caches.open(VIDEO);
   if (await cache.match(fullKey(url))) return;
   try {
-    const res = await fetch(fullKey(url), { cache: "force-cache" });
+    const res = await fetch(fullKey(url));
     if (!res || res.status !== 200 || res.type !== "basic") return;
     await cache.put(fullKey(url), res.clone());
     const keys = await cache.keys();
@@ -208,6 +217,38 @@ async function videoResponse(request) {
   });
 }
 
+/**
+ * 預熱佇列。**只在玩家沒有在等任何東西的時候跑**（目前是主選單），
+ * 一次一支、不並發，收到 `hf-warm-stop` 立刻收手。
+ * 這是唯一會主動下載影片的地方 —— 演出進行中絕對不碰網路。
+ */
+let warmQueue = [];
+let warming = false;
+
+async function runWarm() {
+  if (warming) return;
+  warming = true;
+  try {
+    while (warmQueue.length) {
+      await fillVideoCache(warmQueue.shift());
+    }
+  } finally {
+    warming = false;
+  }
+}
+
+self.addEventListener("message", (event) => {
+  const data = event.data || {};
+  if (data.type === "hf-warm-stop") {
+    warmQueue = [];
+    return;
+  }
+  if (data.type === "hf-warm" && Array.isArray(data.urls)) {
+    warmQueue = data.urls.filter((u) => typeof u === "string").slice(0, 40);
+    runWarm();
+  }
+});
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
@@ -223,12 +264,17 @@ self.addEventListener("fetch", (event) => {
   // 否則帶 Range 的影片請求會被先放行掉，快取永遠不會生效。
   if (url.origin === self.location.origin && url.pathname.endsWith(".mp4")) {
     event.respondWith(
-      videoResponse(request).then((res) => {
-        if (res) return res;
-        // 沒命中：這一次照舊走網路（保持漸進播放），背景把它補進快取
-        event.waitUntil(fillVideoCache(request.url));
-        return fetch(request);
-      }).catch(() => fetch(request))
+      videoResponse(request)
+        // 沒命中就直接走網路，**而且什麼都不做**。
+        //
+        // ⚠️ v1.69 這裡會順手 `event.waitUntil(fillVideoCache(...))` 背景補快取，
+        // 我以為那幾乎不花流量。**實測是錯的**：對會回 206 的伺服器
+        //（GitHub Pages 就是），播放中的 Range 串流之外，背景那次會**整支重抓**——
+        // 量到「Range 送出 64K」之後緊接著「無 Range 送出 335K」。
+        // 在弱訊號 4G 上等於邊播邊搶頻寬，只會更慢。
+        // 補快取一律交給主選單閒著時的 `hf-warm` 訊息去做。
+        .then((res) => res || fetch(request))
+        .catch(() => fetch(request))
     );
     return;
   }

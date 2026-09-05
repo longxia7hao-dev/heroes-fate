@@ -255,6 +255,42 @@
     }
     if (name === "count") warmPickAssets();
     if (name === "mode") prefetchArrivalClip();
+    // 影片快取只在主選單這種「玩家沒在等任何東西」的時候才補；
+    // 一離開主選單就叫停，絕對不跟演出搶頻寬（見 sw.js 的 hf-warm）。
+    warmWaitClipCache(name === "home");
+  }
+
+  /**
+   * 請 Service Worker 把 14 支選角待機片（共約 5.4MB）一支一支存進本機。
+   *
+   * **為什麼要有這個**：一場 4 人魔王討伐要抓約 9.7MB 影片，而 v1.62 之前
+   * 影片完全沒有快取，每一場都重抓。v1.69 起 sw.js 可以 range-aware 地
+   * 快取影片，但**補快取這件事只能在閒著的時候做** —— 播放中背景抓會直接
+   * 跟串流搶頻寬（v1.69 就是這樣，實測邊播邊多抓一整支）。
+   *
+   * 主選單是唯一安全的時機：玩家在看畫面、沒有任何演出在等網路。
+   */
+  function warmWaitClipCache(on) {
+    const sw = navigator.serviceWorker;
+    if (!sw?.controller) return;
+    if (!on) {
+      sw.controller.postMessage({ type: "hf-warm-stop" });
+      return;
+    }
+    Promise.resolve(window.HF_VideoPlayer?.loadManifest?.())
+      .then((man) => {
+        // ⚠️ **這個 await 中間玩家可能已經離開主選單了。**
+        // 不重新確認的話，`hf-warm-stop` 會先送到、清單後送到，等於叫停無效 ——
+        // 實測就是這樣：人已經在選人數畫面，14 支還是全被抓下來了。
+        if (document.body.dataset.screen !== "home") return;
+        const urls = Object.values(man || {})
+          .map((m) => m?.wait)
+          .filter(Boolean)
+          .map((u) => window.HF_VideoPlayer.versioned(u));
+        // controller 可能在這段 await 之間換掉，所以重新取一次
+        if (urls.length) sw.controller?.postMessage({ type: "hf-warm", urls });
+      })
+      .catch(() => {});
   }
 
   function heroById(id) {
