@@ -18,21 +18,64 @@ window.HF_VideoPlayer = (() => {
    * 沒有硬上限就會把呼叫端永遠掛住 —— 那正是「動畫從來沒出現」的原始 bug。
    */
   const REVEAL_GIVEUP_MS = 8000;
+  // 影片清單的抓取上限。fetch() 沒有內建 timeout，弱訊號 4G 上一個「連上了
+  // 但不回應」的連線會讓整段演出吊死，所以一定要自己掐。
+  const MANIFEST_TIMEOUT_MS = 6000;
   let manifest = null;
   let manifestPromise = null;
 
+  /**
+   * 影片清單。**這是全部影片的單一故障點** —— 它拿不到，`videoUrl()` 對每個
+   * 角色、每種片型都會回 null，選角片、確認片、魔王降臨會一起消失。
+   * 睿哥 2026-09-05 回報的「影片載入不了了，到魔王降臨就卡住」就是這裡。
+   *
+   * 舊版有兩個各自足以造成永久災情的問題：
+   *
+   * 1. **失敗會變成永久狀態**：`catch` 裡寫 `manifest = {}`，而 `{}` 是 truthy，
+   *    第一行的 `if (manifest) return` 就再也不會重抓 —— 弱訊號 4G 上偶爾一次
+   *    失敗，這一整個 session 的影片就全滅，重試也沒用。
+   *    改成**失敗時把 `manifestPromise` 清掉、`manifest` 維持 null**，下次呼叫重抓。
+   *
+   * 2. **`fetch()` 本身沒有 timeout**：連線卡住（不是斷線，是不回應）時這個
+   *    promise 永遠不 settle，`await loadManifest()` 就整段吊死 —— 魔王降臨
+   *    卡住不動正是這個。改成 `AbortController` + 6 秒上限。
+   *
+   * 另外會**驗證內容**：弱訊號下截斷的 JSON 一樣是 HTTP 200，parse 不動就當失敗，
+   * 不要把半截的東西當成正常清單（Service Worker 那邊也加了同樣的把關）。
+   */
   function loadManifest() {
     if (manifest) return Promise.resolve(manifest);
     if (!manifestPromise) {
-      manifestPromise = fetch(`assets/videos/manifest.json?v=${MANIFEST_VERSION}`)
-        .then((r) => r.json())
+      const ctrl =
+        typeof AbortController !== "undefined" ? new AbortController() : null;
+      const timer = ctrl
+        ? setTimeout(() => {
+            try { ctrl.abort(); } catch (_) {}
+          }, MANIFEST_TIMEOUT_MS)
+        : null;
+      manifestPromise = fetch(
+        `assets/videos/manifest.json?v=${MANIFEST_VERSION}`,
+        ctrl ? { signal: ctrl.signal } : undefined
+      )
+        .then((r) => {
+          if (!r.ok) throw new Error(`manifest HTTP ${r.status}`);
+          return r.json();
+        })
         .then((j) => {
-          manifest = j || {};
+          if (!j || typeof j !== "object" || !Object.keys(j).length) {
+            throw new Error("manifest empty");
+          }
+          manifest = j;
           return manifest;
         })
         .catch(() => {
-          manifest = {};
-          return manifest;
+          // 不留下 `manifest = {}` 這種「成功地拿到空清單」的假象，
+          // 讓下一次呼叫可以重新抓一遍。
+          manifestPromise = null;
+          return {};
+        })
+        .finally(() => {
+          if (timer) clearTimeout(timer);
         });
     }
     return manifestPromise;

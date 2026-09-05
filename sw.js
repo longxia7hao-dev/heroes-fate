@@ -42,8 +42,8 @@
  * 這樣重新整理一定拿得到最新的頁面（離線才退回快取）。
  */
 
-const SHELL = "hf-shell-v1";
-const MEDIA = "hf-media-v1";
+const SHELL = "hf-shell-v2";
+const MEDIA = "hf-media-v2";
 const KEEP = new Set([SHELL, MEDIA]);
 
 self.addEventListener("install", () => {
@@ -69,13 +69,35 @@ function bucketFor(url) {
   return url.pathname.includes("/assets/") ? MEDIA : SHELL;
 }
 
+/**
+ * 這個回應可以存進快取嗎？
+ *
+ * 只存正常的同源回應；206／opaque 一律不存，避免存進半截的東西。
+ *
+ * ⚠️ **JSON 要多驗一步。** 弱訊號 4G 上被截斷的回應**一樣是 HTTP 200**，
+ * 存進去之後（media 桶不隨版本清空）就是**永久壞掉**：往後每次都命中那份
+ * 半截的快取、`JSON.parse` 每次都失敗。影片清單一旦這樣壞掉，全部影片都會
+ * 消失 —— 睿哥 2026-09-05 遇到的就是這個。存之前先確認真的 parse 得動。
+ */
+async function safeToCache(res) {
+  if (!res || res.status !== 200 || res.type !== "basic") return false;
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("json") || new URL(res.url || "http://x/").pathname.endsWith(".json")) {
+    try {
+      await res.clone().json();
+    } catch (_) {
+      return false;
+    }
+  }
+  return true;
+}
+
 async function cacheFirst(request, cacheName) {
   const cache = await caches.open(cacheName);
   const hit = await cache.match(request);
   if (hit) return hit;
   const res = await fetch(request);
-  // 只存正常的同源回應；206／opaque 一律不存，避免存進半截的東西
-  if (res && res.status === 200 && res.type === "basic") {
+  if (await safeToCache(res)) {
     cache.put(request, res.clone()).catch(() => {});
   }
   return res;
@@ -85,7 +107,7 @@ async function networkFirst(request) {
   const cache = await caches.open(SHELL);
   try {
     const res = await fetch(request);
-    if (res && res.status === 200 && res.type === "basic") {
+    if (await safeToCache(res)) {
       cache.put(request, res.clone()).catch(() => {});
     }
     return res;
@@ -119,6 +141,18 @@ self.addEventListener("fetch", (event) => {
 
   // 版本探針與影片：永遠走網路
   if (url.pathname.endsWith("/build.txt") || url.pathname.endsWith(".mp4")) return;
+
+  // **影片清單絕對不能 cache-first。**
+  // `assets/videos/manifest.json` 落在 `/assets/` 底下，會被分到 media 桶 ——
+  // 而 media 桶是**刻意不隨版本清空**的（不想每次改版都重抓 40MB 素材）。
+  // 於是只要有一次存進半截的內容，往後每次都命中那份壞掉的快取，
+  // `videoUrl()` 對每個角色都回 null，**所有影片永久消失**。
+  // 它只有 4KB，走 network-first 完全不心疼；離線才退回快取。
+  // 根目錄那支 PWA `manifest.json` 一起適用，一樣不該被鎖住。
+  if (url.pathname.endsWith("manifest.json")) {
+    event.respondWith(networkFirst(request));
+    return;
+  }
 
   if (request.mode === "navigate") {
     event.respondWith(networkFirst(request));
