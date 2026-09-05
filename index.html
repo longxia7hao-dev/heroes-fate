@@ -10,6 +10,15 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="theme-color" content="#090512" />
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <!--
+    PWA（加到主畫面）。iOS 的主畫面圖示只吃 PNG、也不讀 manifest 裡的 icons，
+    所以 apple-touch-icon 一定要單獨給一張；圖由 tools/gen_pwa_icons.py 產生。
+    `black-translucent` 讓狀態列透出遊戲底色，開起來才像 App 不像網頁。
+  -->
+  <link rel="manifest" href="manifest.json?v=1" />
+  <link rel="apple-touch-icon" href="assets/icons/icon-180.png" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="英雄命運" />
   <title>英雄命運 Heroes' Fate</title>
   <!-- 關鍵底色：即使 CSS 慢載也不白屏 -->
   <style>
@@ -76,7 +85,7 @@
           而且開著不重整就永遠不會重抓），所有 ?v= 都不會生效 ——
           那時這行會停在舊版本號，或整行不存在。**改版時記得改這裡。**
         -->
-        <p class="build-stamp" id="build-stamp">v1.61 · 0830-1606</p>
+        <p class="build-stamp" id="build-stamp">v1.62 · 0905-1420</p>
       </div>
     </section>
 
@@ -386,5 +395,21 @@
   <script src="js/audioDirector.js?v=22"></script>
   <script src="js/victoryFilm.js?v=12"></script>
   <script src="js/game.js?v=37"></script>
+  <script>
+    /**
+     * 註冊 Service Worker（PWA 快取層，見 sw.js 檔頭）。
+     *
+     * **等 `load` 之後才註冊**：註冊當下 SW 會開始安裝，若跟第一次進場的
+     * 素材搶頻寬，反而讓睿哥最在意的「第一次開很慢」更慢。
+     *
+     * 失敗一律安靜略過 —— 這是加分功能，不能因為它壞掉就讓遊戲打不開。
+     * （`file://` 直接開、或非 HTTPS 的環境本來就不支援。）
+     */
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("sw.js?v=1").catch(() => {});
+      });
+    }
+  </script>
 </body>
 </html>
