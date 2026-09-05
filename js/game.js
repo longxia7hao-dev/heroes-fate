@@ -3203,12 +3203,51 @@
         notified = true;
         button.textContent = `有新版本 ${live} · 點一下更新`;
         button.hidden = false;
+        // 人在主選單、又還沒開始玩，就直接幫他更新掉 —— 不要指望玩家看到並按下
+        // 那顆按鈕（睿哥就這樣停在 v1.65 五個版本）。`sessionStorage` 那道閂是
+        // 防止「更新完還是舊版」時無限重整。演出進行中絕不自動重整。
+        const busy = document.body.dataset.screen && document.body.dataset.screen !== "home";
+        if (!busy && !sessionStorage.getItem("hf-auto-update")) {
+          try { sessionStorage.setItem("hf-auto-update", live); } catch (_) {}
+          hardUpdate();
+        }
       } catch (_) {
         // 離線或抓不到就安靜略過：這只是加分功能，不能因此壞掉
       }
     }
 
-    button.addEventListener("click", () => location.reload());
+    /**
+     * ⚠️ **`location.reload()` 救不了。**
+     *
+     * 2026-09-05 睿哥手機卡在 v1.65 卡了五個版本，就是這一行。
+     * reload 出去的導覽**還是會經過 Service Worker** —— 舊的 `index.html`
+     * 就躺在 shell 桶裡，弱訊號下 `networkFirst` 的網路那一手一慢一失敗，
+     * 就直接把快取裡那份舊頁面端回來，等於**按了更新又回到同一版**。
+     * 而 `index.html` 自己沒有版本號，所有 `?v=` 的努力也跟著白費（CLAUDE.md 坑 #1）。
+     *
+     * 真正有效的順序是三件事一起做：
+     *   ① 把 shell 桶清掉（舊的 index.html／CSS／JS 都在裡面）
+     *   ② 叫 Service Worker 去抓新的自己
+     *   ③ **換一個網址**再導覽 —— 帶時間戳的網址不可能命中任何一層舊快取
+     */
+    async function hardUpdate() {
+      button.disabled = true;
+      button.textContent = "更新中…";
+      try {
+        if (window.caches) {
+          for (const key of await caches.keys()) {
+            if (key.startsWith("hf-shell")) await caches.delete(key);
+          }
+        }
+      } catch (_) {}
+      try {
+        const reg = await navigator.serviceWorker?.getRegistration?.();
+        await reg?.update?.();
+      } catch (_) {}
+      location.replace(`${location.pathname}?b=${Date.now()}`);
+    }
+
+    button.addEventListener("click", hardUpdate);
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) check();
     });
