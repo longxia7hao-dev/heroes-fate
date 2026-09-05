@@ -114,13 +114,26 @@ html.in-app-chrome #screen-pick .pick-actions .btn {
     inset 0 0 48px rgba(90, 32, 150, 0.12);
 }
 
+/**
+ * 四角紋飾（睿哥 2026-09-05 提供的金色捲葉雕花）。
+ *
+ * ⚠️ **不要再指回 `frame_panel.webp`。** 那是**面板的方框**素材，自帶一圈
+ * 方形外緣；當成角落紋飾用，四個角就會各出現一個方框 —— 睿哥回報的
+ *「黑色四方匡」就是它（v1.56～v1.62）。當時那是 Grok 推不上圖時的頂替方案。
+ *
+ * 新素材已經在 `tools/gen_ui_art.py` 裡去背成帶 alpha 的 WebP，
+ * 所以這裡**不能再用 `mix-blend-mode: screen`** —— 那是給「黑底沒去背」的
+ * 素材用的權宜手法，套在已經有 alpha 的圖上只會把金色洗白。
+ *
+ * 素材輸出時已經翻成「左上角」方向，所以下面四條翻轉規則沿用不動。
+ */
 .aaa-filigree {
   position: absolute;
-  width: 78px;
-  height: 78px;
-  background: url("../assets/ui/frame_panel.webp") center / contain no-repeat;
-  mix-blend-mode: screen;
-  opacity: 0.82;
+  /* 跟著螢幕縮：360 寬的機子約 62px，大螢幕最多 104px */
+  width: clamp(62px, 17vw, 104px);
+  height: clamp(62px, 17vw, 104px);
+  background: url("../assets/ui/corner.webp?v=1") center / contain no-repeat;
+  opacity: 0.95;
   pointer-events: none;
 }
 .aaa-filigree.nw { top: -6px; left: -6px; }

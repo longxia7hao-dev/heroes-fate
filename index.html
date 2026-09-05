@@ -9,10 +9,10 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="theme-color" content="#090512" />
-  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="assets/icons/icon-192.png" type="image/png" />
   <!--
     PWA（加到主畫面）。iOS 的主畫面圖示只吃 PNG、也不讀 manifest 裡的 icons，
-    所以 apple-touch-icon 一定要單獨給一張；圖由 tools/gen_pwa_icons.py 產生。
+    所以 apple-touch-icon 一定要單獨給一張；圖由 tools/gen_ui_art.py 產生。
     `black-translucent` 讓狀態列透出遊戲底色，開起來才像 App 不像網頁。
   -->
   <link rel="manifest" href="manifest.json?v=1" />
@@ -33,14 +33,14 @@
   <!-- 介面提升層：疊在最後，專門處理 2026-08-14 視覺稿的金框／金屬按鈕語言。
        要退版把這一行拿掉即可，不影響 revamp.css。 -->
   <link rel="stylesheet" href="css/ornate.css?v=20" />
-  <link rel="stylesheet" href="css/aaa.css?v=20" />
+  <link rel="stylesheet" href="css/aaa.css?v=21" />
 </head>
 <body>
   <div id="app">
     <section id="screen-boot" class="screen active">
       <div class="boot-stars" aria-hidden="true"></div>
       <div class="boot-inner">
-        <div class="boot-sigil" aria-hidden="true"><img src="assets/favicon.svg" alt="" /></div>
+        <div class="boot-sigil" aria-hidden="true"><img src="assets/ui/crest.webp?v=1" alt="" width="384" height="384" /></div>
         <p class="boot-sub">抽中的，不只是命運。</p>
         <h1 class="boot-logo">英雄命運</h1>
         <p class="boot-en">HEROES' FATE</p>
@@ -60,7 +60,7 @@
       </div>
       <div class="home-shell">
         <header class="home-brand">
-          <div class="home-crest" aria-hidden="true"><img src="assets/favicon.svg" alt="" /></div>
+          <div class="home-crest" aria-hidden="true"><img src="assets/ui/crest.webp?v=1" alt="" width="384" height="384" /></div>
           <p class="tag">HEROES' FATE</p>
           <i class="aaa-rule" aria-hidden="true"></i>
           <h1><span>英雄</span><span>命運</span></h1>
@@ -85,7 +85,7 @@
           而且開著不重整就永遠不會重抓），所有 ?v= 都不會生效 ——
           那時這行會停在舊版本號，或整行不存在。**改版時記得改這裡。**
         -->
-        <p class="build-stamp" id="build-stamp">v1.62 · 0905-1420</p>
+        <p class="build-stamp" id="build-stamp">v1.63 · 0905-1655</p>
       </div>
     </section>
 
