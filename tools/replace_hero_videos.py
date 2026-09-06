@@ -27,6 +27,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import pathlib
 import re
 import shutil
@@ -37,6 +38,16 @@ import imageio_ffmpeg
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 KINDS = ["wait", "confirm", "attack", "final", "victory"]
+
+# Drive「角色圖」底下的子夾名稱 →  專案裡的 kind。
+# 名稱是從 tools/extract_sora_audio.py 與 PROJECT_NOTES 的歷次紀錄挖出來的。
+DRIVE_FOLDERS = {
+    "wait": "角色等待選擇動畫",
+    "confirm": "角色確定選擇動畫",
+    "attack": "攻擊魔王動畫",
+    "final": "最終戰勝者對戰動畫",
+    "victory": "角色勝利動畫",
+}
 # 只有這三種在演出中會先顯示 poster（切入層在影片載入前的首幀）
 POSTER_KINDS = {"attack", "final", "victory"}
 CRF = "29"
@@ -87,12 +98,75 @@ def make_poster(video: pathlib.Path, dst: pathlib.Path) -> None:
         raise SystemExit(f"poster 產生失敗：{video}\n{r.stderr[-800:]}")
 
 
+def drive_root() -> pathlib.Path:
+    """Drive 素材夾位置。跟 tools/extract_sora_audio.py 用同一套尋找邏輯。
+
+    刻意不寫死帳號路徑（本專案是公開 repo，不放個人信箱）。
+    """
+    env = os.environ.get("HF_DRIVE_ROOT")
+    if env:
+        return pathlib.Path(env)
+    for mount in sorted(pathlib.Path.home().glob("Library/CloudStorage/GoogleDrive-*/我的雲端硬碟")):
+        for folder in ("英雄命運抽（heroes fate)", "英雄旅途"):
+            candidate = mount / folder / "角色圖"
+            if candidate.is_dir():
+                return candidate
+    raise SystemExit(
+        "找不到素材夾。請設環境變數 HF_DRIVE_ROOT 指向 Google Drive 的「角色圖」資料夾。"
+    )
+
+
+def scan(out_dir: pathlib.Path) -> None:
+    """列出 Drive 五個子夾的內容（新到舊），並抽一張首幀方便辨識是哪個角色。
+
+    **為什麼需要這步**：Drive 裡的檔名是 Sora 產生的 UUID，看不出是誰。
+    歷次換素材都得先抽幀用眼睛認（PROJECT_NOTES 有紀錄）。這裡一次做完。
+    """
+    root = drive_root()
+    print(f"素材夾：{root}\n")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for kind, folder in DRIVE_FOLDERS.items():
+        d = root / folder
+        if not d.is_dir():
+            print(f"[{kind}] 找不到 {folder}")
+            continue
+        vids = sorted(
+            [f for f in d.iterdir() if f.suffix.lower() in (".mp4", ".mov")],
+            key=lambda f: f.stat().st_mtime,
+            reverse=True,
+        )
+        print(f"[{kind}] {folder}　共 {len(vids)} 支（新到舊）")
+        for i, f in enumerate(vids[:6]):
+            thumb = out_dir / f"{kind}_{i}_{f.stem[:16]}.jpg"
+            subprocess.run(
+                [ff(), "-y", "-ss", "1", "-i", str(f), "-frames:v", "1",
+                 "-vf", "scale=240:-2", str(thumb)],
+                capture_output=True,
+            )
+            import datetime
+            when = datetime.datetime.fromtimestamp(f.stat().st_mtime).strftime("%m-%d %H:%M")
+            print(f"    {when}  {f.stat().st_size/1048576:6.1f}M  {probe(f):<20} {f.name}")
+            print(f"              首幀 → {thumb}")
+        print()
+    print(f"首幀圖都在 {out_dir}／打開來看是哪個角色，再用 --wait/--confirm/... 指定檔案。")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("hero", help="角色 id，例如 monk")
+    ap.add_argument("hero", nargs="?", help="角色 id，例如 monk")
+    ap.add_argument("--scan", action="store_true",
+                    help="只列出 Drive 五個子夾的內容並抽首幀，不做任何轉檔")
+    ap.add_argument("--scan-out", type=pathlib.Path, default=pathlib.Path("/tmp/hf_scan"),
+                    help="--scan 的首幀輸出目錄（預設 /tmp/hf_scan）")
     for k in KINDS:
         ap.add_argument(f"--{k}", type=pathlib.Path, help=f"{k} 的來源影片")
     args = ap.parse_args()
+
+    if args.scan:
+        scan(args.scan_out)
+        return
+    if not args.hero:
+        raise SystemExit("要指定角色 id（例如 monk），或加 --scan 先看 Drive 裡有什麼")
 
     jobs = [(k, getattr(args, k)) for k in KINDS if getattr(args, k)]
     if not jobs:
