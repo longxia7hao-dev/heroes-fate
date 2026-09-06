@@ -945,23 +945,37 @@ html.in-app-chrome #screen-pick .pick-actions .btn {
   align-content: center;
   row-gap: 0.2rem;
 }
+/* 模式名稱：**跟上面「選擇命運儀式」用同一套質感**（睿哥 2026-09-06：「字體太粗了」）。
+ *
+ * v1.79 我把它改成實心金色 ＋ 厚重浮雕，因為擔心漸層剪字會像 v1.66 的勝利字樣
+ * 那樣在 iPhone 上整個消失。但睿哥傳來的 iPhone 截圖裡，**「選擇命運儀式」那行
+ * 本來就是漸層剪字（`background-clip: text` ＋ `filter`），而且顯示完全正常** ——
+ * 等於實機證明了這個寫法在他機器上沒問題，可以放心沿用。
+ *
+ * 差在四個地方，逐一對齊 h2：
+ *   字體 圓體 M PLUS Rounded → 襯線 Noto Serif TC
+ *   字重 900 → 700          ← 「太粗」主要是這個
+ *   字距 0.02em → 0.08em
+ *   上色 實心＋浮雕 → 同一條漸層剪字
+ * 只保留 v1.79 放大的字級。
+ */
 #screen-mode .mode-card .m-title {
-  font-size: clamp(1.6rem, 8.2vw, 2.35rem);
-  line-height: 1.08;
-  letter-spacing: 0.02em;
-  /* 實心金色浮雕，取代漸層剪字（理由見上） */
-  background: none;
-  -webkit-background-clip: border-box;
-  background-clip: border-box;
-  color: #ffd977;
-  -webkit-text-fill-color: #ffd977;
-  filter: none;
-  text-shadow:
-    0 -1px 0 #fff4d2,
-    0 1px 0 #b87c1c,
-    0 2px 0 #8c5511,
-    0 3px 3px rgba(0, 0, 0, 0.7),
-    0 0 12px rgba(255, 206, 92, 0.5);
+  /* ⚠️ 襯線字＋0.08em 字距比原本的圓體寬不少，小螢幕會撐爆卡片。
+   * 360×640 實測過：8.2vw 會溢出，7.2vw 剛好。 */
+  font-size: clamp(1.28rem, 7.2vw, 2.2rem);
+  line-height: 1.1;
+  font-family: var(--font-title, "Noto Serif TC"), Cinzel, "Noto Sans TC", serif;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  background-image: linear-gradient(178deg, #fff6dc 4%, #e9c477 42%, #c9973f 70%, #f3dda6 96%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 18px rgba(255, 190, 85, 0.35);
+  filter:
+    drop-shadow(0 1.5px 0 rgba(48, 22, 4, 0.6))
+    drop-shadow(0 0 12px rgba(255, 200, 96, 0.26));
 }
 #screen-mode .mode-card .m-kicker {
   font-size: clamp(0.72rem, 3vw, 0.86rem);
