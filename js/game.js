@@ -1022,7 +1022,9 @@
   function stopStageVideo(video = $("#stage-video"), release = true) {
     if (!video) return;
     video.classList.remove("show");
-    video.closest?.(".stage")?.classList.remove("video-active");
+    const stage = video.closest?.(".stage");
+    stage?.classList.remove("video-active", "poster-hold");
+    stage?.style.removeProperty("--stage-poster");
     // 下一支不見得也是橫式，object-fit 一定要還原，否則直式片會被加上黑邊
     video.style.objectFit = "";
     try {
@@ -1327,8 +1329,12 @@
        * `stopStageVideo()`，那裡 `show` 與 `video-active` 都會收乾淨。
        */
       if (opts.poster) {
-        video.closest?.(".stage")?.classList.add("video-active");
-        video.classList.add("show");
+        // ⚠️ **這裡不能加 `.show`。** `<video>` 換 src 之後 Safari 會繼續畫上一支的
+        // 最後一幀，露臉就會看到上一輪的動畫（睿哥 2026-09-06 回報）。
+        // 改成只露獨立的 poster 圖層 —— 它是新片自己的首幀，不可能畫到舊的東西。
+        const stage = video.closest?.(".stage");
+        stage?.style.setProperty("--stage-poster", `url("${opts.poster}")`);
+        stage?.classList.add("video-active", "poster-hold");
       }
       // 大支的全螢幕片（魔王降臨 1.35MB）在 4G 上 1 秒絕對載不完，
       // 就緒等待要能個別放寬，否則整段會被判定沒就緒而直接跳過。
@@ -1344,6 +1350,8 @@
         return false;
       }
       if (state.skip) return false;
+      // 影片真的在播了才把 poster 圖層撤掉。順序反過來會閃一下黑。
+      video.closest?.(".stage")?.classList.remove("poster-hold");
       // 聲音要對得上畫面，就得從「真的開播」這一刻起算 —— 4G 上載入可能等好幾秒，
       // 在 await 之前就下音效會變成「聲音先響、畫面幾秒後才來」。
       try { opts.onPlay?.(); } catch (_) {}

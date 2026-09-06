@@ -301,6 +301,15 @@ self.addEventListener("fetch", (event) => {
   // 影片快取只是加速；選角畫面壞掉是功能故障。在拿不到 Safari 實證之前，
   // 一律讓影片走回瀏覽器自己的路。要重新開啟就把這個常數改成 true，
   // 但**務必先在真的 iPhone 上驗過選角翻牌**。
+  // ⚠️ **影片快取關著時，`.mp4` 必須「完全」放行。**
+  // 原本只有這個 if 判斷 `VIDEO_CACHE`，關掉之後不帶 Range 的 `.mp4` 會繼續往下走，
+  // 掉進最後那條 `cacheFirst(request, bucketFor(url))` —— `/assets/` 會被分到 media 桶，
+  // 於是影片還是被存了進去，而且**萬一某次 `<video>` 沒帶 Range，就會拿到 SW 給的
+  // 完整 200**，正是專案鐵則第 6 條要避免的情況。所以在這裡就 return。
+  if (!VIDEO_CACHE && url.origin === self.location.origin && url.pathname.endsWith(".mp4")) {
+    return;
+  }
+
   if (VIDEO_CACHE && url.origin === self.location.origin && url.pathname.endsWith(".mp4")) {
     event.respondWith(
       videoResponse(request)

@@ -884,3 +884,25 @@ html.in-app-chrome #screen-pick .pick-actions .btn {
 }
 .vf-title::before { left: 0.35rem; }
 .vf-title::after { right: 0.35rem; transform: scaleX(-1); }
+
+/* ── 換片時的 poster 圖層（v1.77）─────────────────────────────────
+ * 睿哥 2026-09-06：「魔王降臨／命運排序／命運分隊會先跑出**上一輪的動畫**，
+ * 之後才修正回正確的」。
+ *
+ * 原因：`#stage-video` 是三個模式共用的同一顆 `<video>`。換 `src` 之後
+ * **Safari 常常繼續畫上一支的最後一幀**，而 v1.48 為了避免「點進入戰場後全黑」，
+ * 刻意在 `waitMediaReady()` 之前就先把 `.show`（`opacity: .95`）加上去 ——
+ * 於是那幾秒露出來的是上一輪的畫面。
+ *
+ * 修法：等待期間**不要讓 `<video>` 露臉**，改用這個獨立圖層頂著新片的 poster。
+ * poster 是新片自己的首幀，接上去完全無縫；而且它是 `<div>` 背景，
+ * 不可能畫出上一支的東西。影片真的就緒才 `.show`。
+ */
+.stage.poster-hold::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: var(--stage-poster, none) center / cover no-repeat;
+  pointer-events: none;
+}
