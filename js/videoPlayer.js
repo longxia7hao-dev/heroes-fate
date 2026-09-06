@@ -34,6 +34,13 @@ window.HF_VideoPlayer = (() => {
    */
   const BUFFER_GRACE_MS = 300;
   const BUFFER_TIMEOUT_MS = 3000;
+  /**
+   * 逾時之後還願意在背景等多久。這段期間畫面上是頭像靜圖（乾淨的），
+   * 緩衝完就無縫換成影片；等不到就一直是靜圖 —— 那也比一直頓好。
+   * 20 秒：睿哥最慢的情況（315K ÷ 130KB/s ≈ 2.4 秒）也遠遠夠用，
+   * 留這麼寬是為了訊號更差時仍有機會補上。
+   */
+  const LATE_TAKEOVER_MS = 20000;
   // 影片清單的抓取上限。fetch() 沒有內建 timeout，弱訊號 4G 上一個「連上了
   // 但不回應」的連線會讓整段演出吊死，所以一定要自己掐。
   const MANIFEST_TIMEOUT_MS = 6000;
@@ -734,7 +741,7 @@ window.HF_VideoPlayer = (() => {
         if (stillReady) reveal.done(true);
 
         // ③ 緩衝到能一路播完才讓影片接手。
-        await waitUntilBuffered(target, BUFFER_TIMEOUT_MS - BUFFER_GRACE_MS);
+        const buffered = await waitUntilBuffered(target, BUFFER_TIMEOUT_MS - BUFFER_GRACE_MS);
         if (destroyed || token !== playToken) return reveal.done(false);
         if (target.dataset.src !== src || target.readyState < 2) {
           // 連第一幀都還沒有：交給呼叫端自己的後備（prepareFallback）
@@ -747,8 +754,26 @@ window.HF_VideoPlayer = (() => {
           queueVideoReveal();
           return reveal.done(true);
         }
-        // 逾時也走這裡：退回原本的行為（有第一幀就上，寧可卡一下也不要永遠停在靜圖）
-        takeOverWithVideo();
+        if (buffered) {
+          takeOverWithVideo();
+          return;
+        }
+
+        /**
+         * ④ **逾時了 —— 絕對不要放行沒緩衝完的影片。**
+         *
+         * v1.84 這裡是「有第一幀就上，寧可卡一下也不要永遠停在靜圖」。
+         * 但睿哥的線速（約 130KB/s）本來就常常達不到 3 秒的預算，
+         * 所以那個保險**每一支都會觸發** —— 就是他回報的
+         * 「每隻角色第一次載入的時候都會卡」。
+         *
+         * 而「永遠停在靜圖」是假的兩難：頭像已經在畫面上了（乾淨、不會抖），
+         * 我們可以繼續在背景等，真的緩衝完再無縫接手。
+         * **一張清楚的靜圖，永遠好過一段一直頓的影片。**
+         */
+        waitUntilBuffered(target, LATE_TAKEOVER_MS).then((ok) => {
+          if (ok) takeOverWithVideo();
+        });
       } catch (_) {
         target.removeEventListener("playing", showVideo);
         if (destroyed || token !== playToken) return reveal.done(false);
