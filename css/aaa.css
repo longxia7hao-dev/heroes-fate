@@ -1020,3 +1020,36 @@ html.in-app-chrome #screen-pick .pick-actions .btn {
     font-size: clamp(1.7rem, 3.6vw, 2.2rem);
   }
 }
+
+/* ── 結果頁：一頁塞得下，不要捲動（v1.83）─────────────────────────
+ * 睿哥 2026-09-06：「這個讓他在一個頁面中，不要可以滑動」。
+ *
+ * 現況：`revamp.css` 把面板做成捲動容器（`overflow-y: auto`），而立繪是
+ * `flex: 0 0 auto` ＋ 固定尺寸 —— **刻意不准縮**（原註解：「不讓 flex 壓縮高度，
+ * 否則框變扁、圖跟著被壓」）。於是內容一超過可視高度，就只能捲。
+ *
+ * ⚠️ **雲端重現不出來**：我在 402×874／402×700／402×650／360×640 量到的
+ * `scrollHeight` 都等於 `clientHeight`，剛剛好塞得下 —— 邊際很小，睿哥手機上
+ * 字體或安全區多一點點就溢出了。所以不要靠「調小一點」猜，改成**結構上不可能溢出**。
+ *
+ * 做法：立繪改成 `flex: 0 1 auto` ＋ `max-height: 100%` ＋ `width: auto`。
+ * **`aspect-ratio: 1/1` 配 `width: auto` 是關鍵** —— 高度被壓縮時寬度跟著縮，
+ * 所以永遠是正方形，不會重蹈當初「框變扁、圖被壓」的覆轍。
+ * 按鈕列維持 `flex: 0 0 auto`，永遠佔得到位置。
+ */
+/* ⚠️ **不要在這裡加 `overflow: hidden`。** 我試過，命運排序 6 人的名單會被
+ * 切掉 37px 而且捲不到 —— 那是把「不能捲」做成「看不到」。
+ * 捲動保留當安全閥：靠下面的立繪自動縮讓常見情況塞得下就好，
+ * 名單真的很長時（排序 6 人以上）還是能捲到底。 */
+#screen-result .result-model {
+  flex: 0 1 auto !important;
+  min-height: 0;
+  width: auto !important;
+  max-width: min(52vw, 210px);
+  max-height: 100%;
+  aspect-ratio: 1 / 1;
+}
+/* 按鈕與文字列不准被壓掉 —— 那是玩家真正要點的東西 */
+#screen-result .result-panel > :is(.result-badge, h2, .result-hero, .result-detail, .row) {
+  flex: 0 0 auto;
+}
