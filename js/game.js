@@ -255,6 +255,8 @@
     }
     if (name === "count") warmPickAssets();
     if (name === "mode") prefetchArrivalClip();
+    // 選角畫面閒著時才預抓待機片；離開就完全停手
+    stopPickWarm(name === "pick" ? 2500 : 0);
     // 影片快取只在「玩家沒在等任何東西」的時候才補：主選單，以及看結果的時候。
     // 一離開就叫停，絕對不跟演出搶頻寬（見 sw.js 的 hf-warm）。
     warmVideoCache(name === "home" || name === "result");
@@ -504,6 +506,66 @@
     });
   }
 
+  /* ── 選角畫面的閒置預抓（v1.80）────────────────────────────────
+   *
+   * **這是量出來的，不是猜的。** 睿哥 2026-09-06 的錄影逐幀分析：點下角色後
+   * **畫面完全靜止 1.67 秒**才開始動，而且靜止的是影片中段的某一幀（不是第一幀，
+   * 也不是立繪）—— 代表影片有開始播、播到一半餓死。而那支等待片壓完只有 **166K**。
+   *
+   * 166K 要 1.67 秒 ≈ 100KB/s。這個比例說明瓶頸是**連線延遲**而不是檔案大小 ——
+   * 再壓小也省不了多少（v1.78 已經把全庫壓過一輪，他說「還是一樣卡」）。
+   *
+   * 原本 `warmPickAssets()` 是**刻意不預抓**的（註解寫：任意抓第一位英雄的
+   * wait + confirm 會白耗約 700KB）。那是影片還很大時的判斷；現在一支只剩
+   * 166〜260K，而玩家在選角畫面會停留數十秒，那段時間完全閒著。
+   *
+   * 做法：**一次一支**用 `fetch()` 把其他角色的待機片讀進瀏覽器的 HTTP 快取。
+   * 手指一碰角色卡就 `abort()` 並停 2.5 秒 —— **絕不跟玩家眼前正在載的那支搶頻寬**。
+   * 這是 v1.69「邊播邊多抓一整支」學到的教訓：預抓只能在真的閒著的時候做。
+   *
+   * 注意：這裡走的是純 `fetch()`，只碰瀏覽器自己的 HTTP 快取，
+   * **不經 Service Worker、也不做 blob** —— 專案鐵則第 6 條。
+   */
+  let pickWarmToken = 0;
+  let pickWarmCtrl = null;
+  let pickWarmTimer = null;
+
+  function stopPickWarm(resumeMs = 2500) {
+    pickWarmToken++;                       // 進行中的那一輪會自己收手
+    try { pickWarmCtrl?.abort(); } catch (_) {}
+    pickWarmCtrl = null;
+    clearTimeout(pickWarmTimer);
+    pickWarmTimer = null;
+    if (resumeMs > 0) pickWarmTimer = setTimeout(startPickWarm, resumeMs);
+  }
+
+  function startPickWarm() {
+    clearTimeout(pickWarmTimer);
+    pickWarmTimer = null;
+    if (document.body.dataset.screen !== "pick") return;
+    const token = ++pickWarmToken;
+    (async () => {
+      const vp = window.HF_VideoPlayer;
+      if (!vp?.loadManifest || !vp?.versioned) return;
+      let man;
+      try { man = await vp.loadManifest(); } catch (_) { return; }
+      for (const [id, m] of Object.entries(man || {})) {
+        if (token !== pickWarmToken) return;
+        if (document.body.dataset.screen !== "pick") return;
+        if (!m?.wait || id === state.selectedHeroId) continue;
+        pickWarmCtrl = new AbortController();
+        try {
+          const res = await fetch(vp.versioned(m.wait), { signal: pickWarmCtrl.signal });
+          // 一定要把 body 讀完，否則不會真的進 HTTP 快取
+          await res.arrayBuffer();
+        } catch (_) {
+          if (token !== pickWarmToken) return;   // 是被中止的，交給計時器重啟
+        }
+        pickWarmCtrl = null;
+      }
+    })();
+  }
+
   function warmPickAssets() {
     ensurePlayers();
     // 人數頁不知道玩家會點誰，只暖 2KB manifest；任意抓第一位英雄的
@@ -573,6 +635,8 @@
       const id = btn.dataset.id;
       if (!id) return;
       primedPointerId = id;
+      // 玩家要看這一支了，背景預抓立刻讓路（2.5 秒後再繼續）
+      stopPickWarm(2500);
       ensurePickVideo()?.prime?.(id, "wait")?.catch?.(() => {});
     }, { passive: true });
 
