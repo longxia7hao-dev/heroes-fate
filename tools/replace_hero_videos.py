@@ -67,13 +67,19 @@ def probe(path: pathlib.Path) -> str:
     return f"{dim.group(0)[2:] if dim else '?'}  {secs:.2f}s"
 
 
-def encode(src: pathlib.Path, dst: pathlib.Path) -> None:
-    """轉成跟現行行動版一致的規格。寬度統一 720，高度維持原比例（-2 保證偶數）。"""
+def encode(src: pathlib.Path, dst: pathlib.Path, crf: str = CRF) -> None:
+    """轉成跟現行行動版一致的規格。寬度統一 720，高度維持原比例（-2 保證偶數）。
+
+    `-map 0:v:0` 不能省：Sora 的原片常夾一軌 mjpeg 封面圖，不指定的話
+    ffmpeg 的預設選片規則（挑解析度最高的，同分才取索引小的）會變成
+    「剛好沒出事」而不是「保證正確」。v1.55 就被這個咬過。
+    """
     dst.parent.mkdir(parents=True, exist_ok=True)
     tmp = dst.with_suffix(".tmp.mp4")
     cmd = [
         ff(), "-y", "-i", str(src),
-        "-c:v", "libx264", "-crf", CRF, "-preset", "slow",
+        "-map", "0:v:0", "-map", "0:a:0?",
+        "-c:v", "libx264", "-crf", crf, "-preset", "slow",
         "-profile:v", "main", "-pix_fmt", "yuv420p",
         "-vf", "scale=720:-2",
         "-c:a", "aac", "-b:a", "64k", "-ac", "2",
@@ -227,6 +233,9 @@ def main() -> None:
     ap.add_argument("--finish", action="store_true",
                     help="轉完直接把 MEDIA_VERSION、?v=、版本印記、build.txt 一起處理掉")
     ap.add_argument("--stamp", help="--finish 要寫的版本印記，例如 'v1.75 · 0906-0400'。不給就自動 +1")
+    ap.add_argument("--crf", default=CRF,
+                    help=f"畫質參數，預設 {CRF}（v1.36 的行動版基準）。"
+                         "粒子多的片子 CRF 29 會爆體積，可調到 31～32 換回檔案大小")
     for k in KINDS:
         ap.add_argument(f"--{k}", type=pathlib.Path, help=f"{k} 的來源影片")
     args = ap.parse_args()
@@ -248,8 +257,8 @@ def main() -> None:
     for kind, src in jobs:
         dst = ROOT / f"assets/videos/mobile/{kind}/{args.hero}.mp4"
         before = probe(dst) + f"  {dst.stat().st_size/1024:.0f}K" if dst.exists() else "(原本沒有)"
-        print(f"[{kind}] 來源 {probe(src)}  {src.stat().st_size/1024/1024:.1f}M")
-        encode(src, dst)
+        print(f"[{kind}] 來源 {probe(src)}  {src.stat().st_size/1024/1024:.1f}M  (CRF {args.crf})")
+        encode(src, dst, args.crf)
         print(f"        舊：{before}")
         print(f"        新：{probe(dst)}  {dst.stat().st_size/1024:.0f}K")
         if kind in POSTER_KINDS:

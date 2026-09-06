@@ -6,7 +6,7 @@
  */
 window.HF_VideoPlayer = (() => {
   const MANIFEST_VERSION = "15";
-  const MEDIA_VERSION = "29";
+  const MEDIA_VERSION = "30";
   /** 立繪／頭像／poster 的版本，必須與 game.js 的 ART_VERSION 一致 */
   const ART_VERSION = "6";
   /** 攻擊／勝利短片維持現有節奏；選角確定片必須以原始速度完整播放。 */
