@@ -256,7 +256,7 @@
     if (name === "count") warmPickAssets();
     if (name === "mode") prefetchArrivalClip();
     // 選角畫面閒著時才預抓待機片；離開就完全停手
-    stopPickWarm(name === "pick" ? 2500 : 0);
+    stopPickWarm(name === "pick" ? 6000 : 0);
     // 影片快取只在「玩家沒在等任何東西」的時候才補：主選單，以及看結果的時候。
     // 一離開就叫停，絕對不跟演出搶頻寬（見 sw.js 的 hf-warm）。
     warmVideoCache(name === "home" || name === "result");
@@ -530,7 +530,19 @@
   let pickWarmCtrl = null;
   let pickWarmTimer = null;
 
-  function stopPickWarm(resumeMs = 2500) {
+  /**
+   * ⚠️ **恢復預抓的等待時間不能太短。**
+   *
+   * 實測（限速 130KB/s）：點下一個角色後 5 秒內，網路上跑的是
+   * `wait/knight 224K` ＋ **`wait/dark_elf 169K`＋`wait/ranger 185K`** ——
+   * 後面兩支**玩家根本沒點**，卻在他正在等的那支影片還沒緩衝完時就開始搶頻寬。
+   * 在 130KB/s 上那是 2.7 秒的頻寬被拿走。
+   *
+   * 原本 2.5 秒太短：睿哥實際的節奏是每 1.3〜1.5 秒換一個角色，
+   * 而一支影片要 1.3 秒才緩衝得完 —— 等於他還在看的時候預抓就回來搶了。
+   * 改成 6 秒：他真的停下來看某一位時才補，正在瀏覽時完全不打擾。
+   */
+  function stopPickWarm(resumeMs = 6000) {
     pickWarmToken++;                       // 進行中的那一輪會自己收手
     try { pickWarmCtrl?.abort(); } catch (_) {}
     pickWarmCtrl = null;
@@ -635,8 +647,8 @@
       const id = btn.dataset.id;
       if (!id) return;
       primedPointerId = id;
-      // 玩家要看這一支了，背景預抓立刻讓路（2.5 秒後再繼續）
-      stopPickWarm(2500);
+      // 玩家要看這一支了，背景預抓立刻讓路（6 秒後再繼續，見 stopPickWarm 的說明）
+      stopPickWarm(6000);
       ensurePickVideo()?.prime?.(id, "wait")?.catch?.(() => {});
     }, { passive: true });
 

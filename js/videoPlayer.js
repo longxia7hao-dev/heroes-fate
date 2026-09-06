@@ -157,7 +157,13 @@ window.HF_VideoPlayer = (() => {
     if (!el || !el.duration || !isFinite(el.duration)) return false;
     const b = el.buffered;
     if (!b.length) return false;
-    return b.start(0) <= 0.05 && b.end(b.length - 1) >= el.duration - 0.15;
+    // ⚠️ **必須是「一段連續」的範圍。**
+    // 原本只看 `start(0)` 與 `end(length-1)` —— 那是第一段的頭與最後一段的尾，
+    // **中間有洞也會被判成完整**。Chromium 走這條路徑時永遠只有一段，所以在
+    // 雲端測不出來；但 **Safari 用 Range 請求時很常產生多段**，一旦中間缺一塊，
+    // 播到那裡就會餓死 —— 正是「已經緩衝完了卻還是凍住」的成因之一。
+    if (b.length !== 1) return false;
+    return b.start(0) <= 0.05 && b.end(0) >= el.duration - 0.15;
   }
 
   /**
