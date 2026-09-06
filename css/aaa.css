@@ -906,3 +906,103 @@ html.in-app-chrome #screen-pick .pick-actions .btn {
   background: var(--stage-poster, none) center / cover no-repeat;
   pointer-events: none;
 }
+
+/* ── 選擇命運儀式：照睿哥 2026-09-06 的參考圖重排（v1.79）──────────────
+ * 兩個差別最明顯：
+ *   ① **模式名稱太小**：原本 17.9px，參考圖裡是整張卡的主角。
+ *   ② **上下各空掉 112px**：面板高 650、畫面高 874，置中之後上下各留一大片。
+ *      參考圖裡面板是填滿整個框的。
+ *
+ * ⚠️ **標題不用 `background-clip: text`。** `ornate.css:282` 原本是用漸層剪字，
+ * 但 v1.66 在睿哥的 iPhone 上就是這招（配上 `filter`）讓勝利字樣整個消失的
+ * —— 字的填色是 transparent，底圖一旦不畫就什麼都不剩，沒有中間狀態。
+ * 現在標題變成整張卡的主角，更不能冒這個險：改用**實心金色 ＋ 疊層 text-shadow**
+ * 做同樣的浮雕感（做法與 v1.67 的勝利字樣一致），最差也只是少了陰影。
+ */
+#screen-mode {
+  align-items: stretch;
+}
+#screen-mode .mode-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: clamp(0.8rem, 2.2vh, 1.25rem) 0.9rem clamp(0.7rem, 2vh, 1rem);
+}
+#screen-mode .mode-cards {
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-auto-rows: 1fr;               /* 三張卡平分剩下的高度 */
+  gap: clamp(0.45rem, 1.5vh, 0.85rem);
+  align-content: stretch;
+}
+#screen-mode .mode-card,
+#screen-mode .mode-card-teams {
+  min-height: 0;
+  /* 列高各自貼齊內容再整組置中，CTA 才不會被撐到卡片底部飄在那裡 */
+  grid-auto-rows: min-content;
+  align-content: center;
+  row-gap: 0.2rem;
+}
+#screen-mode .mode-card .m-title {
+  font-size: clamp(1.6rem, 8.2vw, 2.35rem);
+  line-height: 1.08;
+  letter-spacing: 0.02em;
+  /* 實心金色浮雕，取代漸層剪字（理由見上） */
+  background: none;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  color: #ffd977;
+  -webkit-text-fill-color: #ffd977;
+  filter: none;
+  text-shadow:
+    0 -1px 0 #fff4d2,
+    0 1px 0 #b87c1c,
+    0 2px 0 #8c5511,
+    0 3px 3px rgba(0, 0, 0, 0.7),
+    0 0 12px rgba(255, 206, 92, 0.5);
+}
+#screen-mode .mode-card .m-kicker {
+  font-size: clamp(0.72rem, 3vw, 0.86rem);
+}
+/* 主標題也跟著參考圖放大 */
+#screen-mode .mode-panel h2 {
+  font-size: clamp(1.9rem, 9.2vw, 2.6rem);
+  line-height: 1.1;
+}
+#screen-mode .mode-card .m-desc {
+  font-size: clamp(0.78rem, 3.2vw, 0.92rem);
+}
+/* ⚠️ **`.m-ico` 的 `font-size` 千萬別動。** `revamp.css:873` 用 `font-size: 0`
+ * 把元素裡的文字（RAID／ORDER／TEAM）藏起來，徽章上的符號是 `::before` 畫的。
+ * 我一改字級，那三個字就整個跑出來蓋住卡片了。要放大只能調 `::before`。 */
+#screen-mode .mode-card .m-ico {
+  width: clamp(2.9rem, 12vw, 3.6rem);
+  height: clamp(2.9rem, 12vw, 3.6rem);
+}
+#screen-mode .mode-card .m-ico::before {
+  font-size: clamp(1.5rem, 6vw, 2rem);
+}
+
+/* 平板／橫向：卡片改回「高度貼齊內容」，不要硬撐成三等分。
+ * 實測 820×1180 下硬撐會讓卡片內容溢出（`scrollHeight > clientHeight`）——
+ * 寬螢幕的欄寬變窄、描述會折更多行，撐高反而塞不下。
+ * 手機（睿哥實際在用的）維持填滿的版面。 */
+@media (min-width: 721px) {
+  #screen-mode .mode-cards {
+    flex: 0 0 auto;
+    grid-auto-rows: auto;
+    align-content: center;
+  }
+  #screen-mode .mode-panel {
+    height: auto;
+    justify-content: center;
+  }
+  #screen-mode .mode-card .m-title {
+    font-size: clamp(1.3rem, 3vw, 1.75rem);
+  }
+  #screen-mode .mode-panel h2 {
+    font-size: clamp(1.7rem, 3.6vw, 2.2rem);
+  }
+}
