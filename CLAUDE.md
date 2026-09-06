@@ -29,6 +29,13 @@
 3. 一局**只有一位勝利者**（2026-08-12 已移除「雙重命運」卡）。
 4. 不需輸入名字（玩家 N · 角色名）；同局角色不可重複。
 5. 純靜態 HTML/CSS/JS，**無 build、無框架**。不要引入打包工具或前端框架。
+6. **影片絕對不要走 Service Worker。** `sw.js` 裡有一整套 range-aware 的影片快取
+   （存完整 200、自己切 206），在 Chromium 上驗證完全正常 —— 但 **2026-09-05 在睿哥的
+   iPhone 上，選角卡片整個不翻面、待機影片完全不出現**（翻牌是綁在 `playing` 事件上的，
+   影片沒變成可播就永遠停在卡背）。關掉之後立刻恢復，睿哥親自確認。
+   iOS Safari 讓 `<video>` 走 SW 一向不可靠，而**雲端 session 沒有 Safari 可以驗證**。
+   `VIDEO_CACHE = false` 是刻意的，**不要因為「看起來能加速」就打開**；真要重開，
+   必須先在真的 iPhone 上跑過選角翻牌。
 
 ## 怎麼跑起來
 
@@ -63,6 +70,17 @@ cd /Users/longxia7hao/Heroes_Fate && python3 -m http.server 8888 --bind 0.0.0.0
      **忘了跑，玩家就永遠收不到更新提示。**
 2. **換了影片就要重製 poster**（`assets/videos/poster/{attack,victory,final}/`、`poster/boss/arrival.jpg`）。切入層在影片載入前顯示的是 poster 首幀，忘了重製就會「先閃一張舊角色圖」。
 3. **演出流程有 early return，加新段落要看清楚位置**。`presentBossRaid()` 曾因為 `if (isDoom) { … return; }` 排在播 final 之前，導致命運審判模式整段最後一擊從來沒播過。加新 ACT 前先確認它在所有 return 之前。
+
+## 雲端 session 測不到的三件事（別把「Chromium 上沒問題」當成沒問題）
+
+1. **H.264 解碼**：headless Chromium 完全解不了，所有 `.mp4` 都是 `ERR_FAILED`。
+   要驗影片行為就用 ffmpeg 轉一支 VP9/WebM 當替身。
+2. **Range 請求**：本機 `python3 -m http.server` 對 Range 回 **200 不是 206**，
+   GitHub Pages 回 206。**快取／Range 相關的東西一定要用會回 206 的伺服器測**
+   （`scratchpad/pages_like.py` 那類）。2026-09-05 就因為這個誤判「只抓一次」，
+   實際上線是邊播邊多抓一整支。
+3. **安全區 `env(safe-area-inset-*)`**：headless 沒有瀏海，全部是 0。
+   版面問題查不出來時，把 `inset: 59px 8.8px 34px` 之類的值灌進去模擬 iPhone。
 
 ## 驗證方式
 
