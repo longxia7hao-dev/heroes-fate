@@ -256,62 +256,11 @@
     if (name === "count") warmPickAssets();
     if (name === "mode") prefetchArrivalClip();
     // 選角畫面閒著時才預抓待機片；離開就完全停手
-    stopPickWarm(name === "pick" ? 6000 : 0);
+    // 首頁／人數頁：網路完全閒著，早點開始抓（首頁讓 BGM 與背景圖先走）。
+    // 選角頁：玩家正在點角色，要等他真的停下來才補（見 stopPickWarm）。
+    stopPickWarm({ home: 2000, count: 500, pick: 6000 }[name] ?? 0);
     // 影片快取只在「玩家沒在等任何東西」的時候才補：主選單，以及看結果的時候。
     // 一離開就叫停，絕對不跟演出搶頻寬（見 sw.js 的 hf-warm）。
-    warmVideoCache(name === "home" || name === "result");
-  }
-
-  /**
-   * 請 Service Worker 在閒著的時候，把影片一支一支存進本機。
-   *
-   * **為什麼要有這個**：一場 4 人魔王討伐要抓約 9.7MB 影片，而 v1.62 之前
-   * 影片完全沒有快取，每一場都重抓。v1.69 起 sw.js 可以 range-aware 地
-   * 快取影片，但**補快取這件事只能在閒著的時候做** —— 播放中背景抓會直接
-   * 跟串流搶頻寬（v1.69 就是這樣，實測邊播邊多抓一整支）。
-   *
-   * **順序是照「每一場會用到的機率」排的**，因為 sw.js 的快取有上限（45 支），
-   * 排前面的才留得住：
-   *   ① 魔王降臨 1.4M —— **每一場都播**，單支效益最高
-   *   ② 選角待機片 14 支 5.4M —— 選人時每個角色都會播
-   *   ③ 確認片 14 支 7.0M
-   *   ④ 攻擊切入 14 支 8.6M
-   * 合計 43 支約 22.4MB，剛好塞得進 45 支的上限。
-   *
-   * **勝利片與 final 故意不預熱**：final 一支就 1.8M、14 支共 24.6M，
-   * 一場只會播一支，硬要塞只會把上面那些每場都用得到的擠掉。
-   *
-   * 安全的時機只有兩個：主選單，以及看結果的時候 —— 玩家在讀畫面，
-   * 沒有任何演出在等網路。
-   */
-  const WARM_SCREENS = new Set(["home", "result"]);
-
-  function warmVideoCache(on) {
-    const sw = navigator.serviceWorker;
-    if (!sw?.controller) return;
-    if (!on) {
-      sw.controller.postMessage({ type: "hf-warm-stop" });
-      return;
-    }
-    Promise.resolve(window.HF_VideoPlayer?.loadManifest?.())
-      .then((man) => {
-        // ⚠️ **這個 await 中間玩家可能已經離開了。**
-        // 不重新確認的話，`hf-warm-stop` 會先送到、清單後送到，等於叫停無效 ——
-        // 實測就是這樣：人已經在選人數畫面，14 支還是全被抓下來了。
-        if (!WARM_SCREENS.has(document.body.dataset.screen)) return;
-        const V = window.HF_VideoPlayer.versioned;
-        const heroes = Object.values(man || {});
-        const pick = (kind) => heroes.map((m) => m?.[kind]).filter(Boolean);
-        const urls = [
-          "assets/videos/mobile/boss/arrival.mp4",
-          ...pick("wait"),
-          ...pick("confirm"),
-          ...pick("attack"),
-        ].map(V);
-        // controller 可能在這段 await 之間換掉，所以重新取一次
-        if (urls.length) sw.controller?.postMessage({ type: "hf-warm", urls });
-      })
-      .catch(() => {});
   }
 
   function heroById(id) {
@@ -527,6 +476,7 @@
    * **不經 Service Worker、也不做 blob** —— 專案鐵則第 6 條。
    */
   let pickWarmToken = 0;
+  const pickWarmDone = new Set();  // 這次載入已抓完的角色，換畫面重啟時不重抓
   let pickWarmCtrl = null;
   let pickWarmTimer = null;
 
@@ -551,25 +501,46 @@
     if (resumeMs > 0) pickWarmTimer = setTimeout(startPickWarm, resumeMs);
   }
 
+  /**
+   * 可以預抓的畫面。**首頁與人數頁是最關鍵的兩個** ——
+   * 睿哥 2026-09-07：「不能進入遊戲開始就開始預載全部的待選擇畫面嗎？」
+   * 他說得對：從開遊戲到真的點下第一個角色，中間有好幾秒網路完全閒著，
+   * 而那正是「每隻角色第一次載入都會卡」的唯一補救時機 ——
+   * 到了選角畫面才開始抓，第一支必定來不及。
+   */
+  const WARM_OK_SCREENS = new Set(["home", "count", "pick"]);
+
   function startPickWarm() {
     clearTimeout(pickWarmTimer);
     pickWarmTimer = null;
-    if (document.body.dataset.screen !== "pick") return;
+    if (!WARM_OK_SCREENS.has(document.body.dataset.screen)) return;
     const token = ++pickWarmToken;
     (async () => {
       const vp = window.HF_VideoPlayer;
       if (!vp?.loadManifest || !vp?.versioned) return;
       let man;
       try { man = await vp.loadManifest(); } catch (_) { return; }
-      for (const [id, m] of Object.entries(man || {})) {
+      // ⚠️ **順序要跟選角格一樣，不能用 manifest 的順序。**
+      // 實測：首頁＋人數頁那 7 秒只抓得完 2 支，而 manifest 的頭兩個是
+      // dark_elf／ranger，睿哥點的卻是格子上第一個 knight —— 剛好沒抓到，
+      // 等於白預載。照 `HEROES` 的順序抓，先抓到的就是最可能先被點的。
+      const ids = Array.isArray(HEROES) && HEROES.length
+        ? HEROES.map((h) => h.id)
+        : Object.keys(man || {});
+      for (const id of ids) {
         if (token !== pickWarmToken) return;
-        if (document.body.dataset.screen !== "pick") return;
+        if (!WARM_OK_SCREENS.has(document.body.dataset.screen)) return;
+        const m = man?.[id];
         if (!m?.wait || id === state.selectedHeroId) continue;
+        // 換畫面會讓這一輪重新開始；抓過的就跳過，否則每次都從第一支重抓
+        // （實測看到同一支 dark_elf 被抓了兩次，進度原地踏步）
+        if (pickWarmDone.has(id)) continue;
         pickWarmCtrl = new AbortController();
         try {
           const res = await fetch(vp.versioned(m.wait), { signal: pickWarmCtrl.signal });
           // 一定要把 body 讀完，否則不會真的進 HTTP 快取
           await res.arrayBuffer();
+          pickWarmDone.add(id);
         } catch (_) {
           if (token !== pickWarmToken) return;   // 是被中止的，交給計時器重啟
         }

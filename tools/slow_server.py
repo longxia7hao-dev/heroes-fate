@@ -95,6 +95,15 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
         else:
             self.send_header("Cache-Control", "max-age=600")
+            # ⚠️ Pages 會送 ETag 與 Last-Modified，而 **Chromium 少了它們就不會
+            # 快取 206 的部分內容** —— 沒補這兩個，測「預熱有沒有被重用」會得到
+            # 假的否定結論（2026-09-07 就這樣誤判過一次）。
+            st = target.stat()
+            self.send_header("ETag", f'"{st.st_mtime_ns:x}-{st.st_size:x}"')
+            self.send_header(
+                "Last-Modified",
+                time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime(st.st_mtime)),
+            )
         self.end_headers()
         if head:
             return
