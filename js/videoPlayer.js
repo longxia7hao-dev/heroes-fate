@@ -18,6 +18,22 @@ window.HF_VideoPlayer = (() => {
    * 沒有硬上限就會把呼叫端永遠掛住 —— 那正是「動畫從來沒出現」的原始 bug。
    */
   const REVEAL_GIVEUP_MS = 8000;
+  /**
+   * 選角等待片的「不要卡住」預算。
+   *
+   * `playing` 事件只代表**第一幀解出來了**，不代表後面接得上。睿哥的實際連線
+   * 約 130KB/s、等待片平均 168K（≈1.3 秒），所以一就緒就開播的結果是
+   * **播一下又靜止約 1.9 秒**（兩支螢幕錄影逐幀分析：1.67s／1.87s）。
+   *
+   * 改成：先用已在快取裡的頭像把牌翻開（實測 376ms），影片**整支緩衝完**
+   * 才接手。總等待時間差不多，但不會出現「動一下又結凍」的觀感。
+   *
+   *   GRACE   影片本來就在快取裡的話這段時間內就緩衝完了 → 直接揭露影片，不必先閃頭像
+   *   TIMEOUT 緩衝不完也不能無限等，逾時就退回原本的行為（有第一幀就上）。
+   *           168K÷130KB/s≈1.3s、最大的 paladin 315K≈2.4s，3 秒是留了餘裕的上限
+   */
+  const BUFFER_GRACE_MS = 300;
+  const BUFFER_TIMEOUT_MS = 3000;
   // 影片清單的抓取上限。fetch() 沒有內建 timeout，弱訊號 4G 上一個「連上了
   // 但不回應」的連線會讓整段演出吊死，所以一定要自己掐。
   const MANIFEST_TIMEOUT_MS = 6000;
@@ -123,6 +139,55 @@ window.HF_VideoPlayer = (() => {
   function versioned(url) {
     if (!url) return null;
     return url + (url.includes("?") ? "&" : "?") + `v=${assetVersion(url, MEDIA_VERSION)}`;
+  }
+
+  /**
+   * 這支影片是不是**真的整支緩衝完了**（從頭到尾連續一段）。
+   *
+   * ⚠️ **刻意不用 `canplaythrough` / `readyState >= 4`**。規格上那只是
+   * 「以目前下載速度*估計*可以播完不中斷」—— 是估計，不是事實。實測
+   * （Chromium，影片限速 130KB/s）`canplaythrough` 跟 `playing` **每次都在同一毫秒**
+   * 觸發，等於完全沒有等到。睿哥手機上會卡住 1.9 秒，正是這個估計失準：
+   * 頻寬還要分給角色 BGM 與其他素材，實際到不了估計的速度。
+   *
+   * 等待片只有約 168K（3.04s），整支等完在 130KB/s 上也才 1.3 秒，
+   * 所以直接要求「全部緩衝完」——**確定的事實，跨瀏覽器都一樣**。
+   */
+  function fullyBuffered(el) {
+    if (!el || !el.duration || !isFinite(el.duration)) return false;
+    const b = el.buffered;
+    if (!b.length) return false;
+    return b.start(0) <= 0.05 && b.end(b.length - 1) >= el.duration - 0.15;
+  }
+
+  /**
+   * 等到影片整支緩衝完。逾時回 false，由呼叫端決定怎麼退。
+   *
+   * 用輪詢而不是只掛事件：這條路徑上的影片在等待期間是**被暫停又藏起來**的
+   * （`revealPrepared()` 揭露靜圖時會 pause 掉所有 video），媒體事件在那種狀態
+   * 下最不可靠，`progress` 也不保證密集。輪詢 `buffered` 是唯一穩的。
+   *
+   * @returns {Promise<boolean>} 是否在期限內緩衝完成
+   */
+  function waitUntilBuffered(el, timeoutMs) {
+    if (!el) return Promise.resolve(false);
+    if (fullyBuffered(el)) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (ok) => {
+        if (done) return;
+        done = true;
+        clearInterval(poll);
+        clearTimeout(timer);
+        resolve(ok);
+      };
+      // 50ms：實測 WebKit 在 play() 回來時往往「差一點就緩衝完」，
+      // 輪詢間隔就是這條路徑白等的時間，壓小一點沒有成本。
+      const poll = setInterval(() => {
+        if (fullyBuffered(el)) finish(true);
+      }, 50);
+      const timer = setTimeout(() => finish(false), timeoutMs);
+    });
   }
 
   /**
@@ -576,17 +641,53 @@ window.HF_VideoPlayer = (() => {
         target.playbackRate = 1;
       } catch (_) {}
 
+      // 選角的等待片走「先翻牌、影片緩衝完再接手」；其餘（確定片、演出片）維持原樣。
+      const smoothWait = deferShow && playKind === "wait";
+
+      /** 把已就緒的影片掛成待揭露內容（翻牌 90° 由 revealPrepared 換上）。 */
+      const queueVideoReveal = () => {
+        // `playing` 代表第一幀已解碼。先在不可見層暫停並歸零，等卡牌
+        // 轉到 90° 才重新播放，因此不會在翻牌期間偷跑。
+        try { target.pause(); } catch (_) {}
+        try { target.currentTime = 0; } catch (_) {}
+        pendingReveal = { type: "video", id, token, target, playKind, src };
+        setState("ready");
+      };
+
+      let tookOver = false;
+      /**
+       * 影片緩衝完成時的接手路徑。揭露點可能還沒到，也可能早就過去了 ——
+       * **這正是雲端那次改 `canplaythrough` 失敗的地方**：只走 pendingReveal
+       * 的話，牌一旦已經用頭像翻開就再也沒有人會來消費它，影片永遠不上場。
+       *
+       *   - 揭露點還沒到 → 把待揭露內容從靜圖換成影片，翻牌中點一次揭露，不閃兩段
+       *   - 揭露點已過去 → 直接 activateVideo 換掉靜圖
+       */
+      const takeOverWithVideo = () => {
+        if (tookOver || destroyed || token !== playToken) return;
+        if (!target || target.dataset.src !== src || target.readyState < 2) return;
+        tookOver = true;
+        const pending = pendingReveal;
+        if (pending && pending.type === "still" && pending.token === token && pending.id === id) {
+          queueVideoReveal();
+          return;
+        }
+        try { target.currentTime = 0; } catch (_) {}
+        if (!activateVideo(target, token, id)) return;
+        try {
+          const resume = target.play();
+          resume?.catch?.(() => {});
+        } catch (_) {}
+        setState("playing");
+        primeMedia(id, "confirm");
+      };
+
       let shown = false;
       const showVideo = () => {
         if (shown || destroyed || token !== playToken || reveal.settled) return;
         shown = true;
         if (deferShow) {
-          // `playing` 代表第一幀已解碼。先在不可見層暫停並歸零，等卡牌
-          // 轉到 90° 才重新播放，因此不會在翻牌期間偷跑。
-          try { target.pause(); } catch (_) {}
-          try { target.currentTime = 0; } catch (_) {}
-          pendingReveal = { type: "video", id, token, target, playKind, src };
-          setState("ready");
+          queueVideoReveal();
           reveal.done(true);
           return;
         }
@@ -595,7 +696,7 @@ window.HF_VideoPlayer = (() => {
         reveal.done(true);
         if (playKind === "wait") primeMedia(id, "confirm");
       };
-      target.addEventListener("playing", showVideo, { once: true });
+      if (!smoothWait) target.addEventListener("playing", showVideo, { once: true });
 
       const tryPlay = async (el) => {
         const p = el.play();
@@ -605,7 +706,43 @@ window.HF_VideoPlayer = (() => {
       try {
         await tryPlay(target);
         if (destroyed || token !== playToken) return reveal.done(false);
-        showVideo();
+        if (!smoothWait) {
+          showVideo();
+          return;
+        }
+
+        // ① 先給影片一小段時間。本來就在快取裡（或 v1.80 的閒置預抓已經拿過）
+        //    的話這時就緒了 —— 直接照原本的路徑揭露影片，不必先閃一張頭像。
+        if (await waitUntilBuffered(target, BUFFER_GRACE_MS)) {
+          if (destroyed || token !== playToken) return reveal.done(false);
+          tookOver = true;
+          queueVideoReveal();
+          return reveal.done(true);
+        }
+        if (destroyed || token !== playToken) return reveal.done(false);
+
+        // ② 影片還在下載 —— 先用已在選角格快取裡的 13K 頭像把牌翻開（實測 376ms），
+        //    別讓玩家盯著卡背等 1.3 秒。這條後備路徑本來就是對的，原樣沿用。
+        const stillReady = await queueFallback(id, token);
+        if (destroyed || token !== playToken) return reveal.done(false);
+        if (stillReady) reveal.done(true);
+
+        // ③ 緩衝到能一路播完才讓影片接手。
+        await waitUntilBuffered(target, BUFFER_TIMEOUT_MS - BUFFER_GRACE_MS);
+        if (destroyed || token !== playToken) return reveal.done(false);
+        if (target.dataset.src !== src || target.readyState < 2) {
+          // 連第一幀都還沒有：交給呼叫端自己的後備（prepareFallback）
+          if (!reveal.settled) reveal.done(false);
+          return;
+        }
+        if (!reveal.settled) {
+          // 頭像後備失敗過，沒有東西可以先翻 → 維持原本「翻牌中點揭露影片」的行為
+          tookOver = true;
+          queueVideoReveal();
+          return reveal.done(true);
+        }
+        // 逾時也走這裡：退回原本的行為（有第一幀就上，寧可卡一下也不要永遠停在靜圖）
+        takeOverWithVideo();
       } catch (_) {
         target.removeEventListener("playing", showVideo);
         if (destroyed || token !== playToken) return reveal.done(false);
