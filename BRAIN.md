@@ -1,0 +1,201 @@
+# Heroes' Fate 共用腦
+
+> 給**任何接手的人或 AI**：`PROJECT_NOTES.md` 的變更日誌已經 137 條，沒人讀得完。
+> 這份是**濃縮過的、只留還會咬人的東西**。動工前讀這份就夠；要查某一版的細節再去翻日誌。
+>
+> 規則層看 `CLAUDE.md`（每個 session 自動載入）。這份補的是**經驗層**。
+
+---
+
+## 30 秒版
+
+聚會用的抽籤遊戲，**純靜態 HTML/CSS/JS，無 build 無框架**。
+睿哥**只在 iPhone Safari 上用 4G 玩**，`push` 到 `main` → GitHub Pages 自動上線。
+
+```
+正式網址   https://longxia7hao-dev.github.io/heroes-fate/
+本機目錄   /Users/longxia7hao/Heroes_Fate
+```
+
+**他的實際連線約 120〜150 KB/s（約 1 Mbps）。** 這個數字決定了一切效能決策 ——
+任何「在桌機上很快」的方案都要先換算成他的速度再判斷。
+
+---
+
+## 現況速覽
+
+| | |
+|---|---|
+| 版本 | 見 `index.html` 的 `.build-stamp`（＝線上真正的版本） |
+| 角色 | 14 位。**`id` 從不改名**，70 條影片路徑與音效全靠它 |
+| 影片 | `assets/videos/mobile/` 約 46MB，71 支。一場 4 人約 6.9MB |
+| 音效 | `assets/audio/` 約 4.6MB，Web Audio（不是 `<audio>` 元素） |
+| 程式 | `js/game.js` 3348 行是主體，`js/videoPlayer.js` 1066 行管所有影片 |
+
+**五個 JS 檔完全沒被 `index.html` 引用 —— 是死的，別照著它們推論架構**：
+`characterStage.js`／`frameAnimator.js`／`spritePlayer.js`／`victory.js`／`viewer3d.js`。
+（尚未刪除，刪之前問睿哥。）
+
+---
+
+## 鐵則（違反會出事）
+
+1. **改 `js/rng.js` 前先問睿哥。** 目前 SHA-256
+   `9ab55a96f19f162c1380a06cc7b3f2d496fb088aa393d570afeef7ef662f021a`
+2. **先 RNG 定案，再播演出**（seed-first）。演出不可以影響結果。
+3. **影片絕對不要走 Service Worker**（`sw.js` 的 `VIDEO_CACHE = false`）。詳見下面地雷 ①。
+4. 一局只有一位勝利者；同局角色不可重複；不需輸入名字。
+5. 不要引入打包工具或前端框架。
+6. **收工一定要 `git push`** —— 不 push 睿哥的手機看不到任何東西。
+
+---
+
+## 地雷區
+
+### ① 影片走 Service Worker ＝ 選角畫面直接死掉
+
+`sw.js` 裡有一整套 range-aware 的影片快取（存完整 200、自己切 206），
+**在 Chromium 上驗證完全正常**。但 2026-09-05 在睿哥 iPhone 上：
+**卡片完全不翻面、待機影片完全不出現**（翻牌綁在 `playing` 事件，
+影片沒變成可播就永遠停在卡背）。關掉立刻恢復，他親自確認。
+
+程式碼還留著，**很容易被下一個人「看起來能加速」就打開**。要重開必須先在真 iPhone 上驗過選角翻牌。
+
+### ② 快取有四層，少做一層手機就看到舊的
+
+```
+改 JS/CSS      → index.html 對應的 ?v=N +1
+換影片         → videoPlayer.js 的 MEDIA_VERSION +1（改 manifest 再加 MANIFEST_VERSION）
+換素材         → python3 tools/gen_asset_versions.py（逐檔雜湊表）
+CSS 裡的 url() → 手動改 css 檔內的 ?v=（吃不到 JS 的雜湊表）
+```
+
+**最陰的是 `index.html` 自己**：頂端那三個 `<meta http-equiv="Cache-Control">`
+**對瀏覽器完全沒有作用**（只有真的 HTTP header 算數），而 Pages 給 HTML 的是 `max-age=600`。
+所以每次改版都要**更新 `.build-stamp` ＋ 跑 `tools/sync_build.py`**，玩家才收得到更新提示。
+
+**而且「更新」按鈕本身曾經是壞的**：原本只做 `location.reload()`，
+但 reload 出去的導覽還是會經過 SW、被快取裡的舊 `index.html` 接走 ——
+睿哥為此卡在 v1.65 卡了五個版本。現在改成「清 shell 桶 ＋ `registration.update()` ＋ 換帶時間戳的網址」，
+而且主選單會自動更新（演出中只掛提示）。
+
+### ③ 影片播放：`playing` 不代表播得動
+
+`playing` 只表示**第一幀解出來了**。在他的 4G 上一就緒就開播 ＝ **播一下就餓死**
+（兩支錄影逐幀量到靜止 1.67s／1.87s）。
+
+現在的規則：**等到整支緩衝完才讓影片上場，還沒好就顯示已在快取裡的頭像。**
+逾時也**不放行沒緩衝完的影片** —— 一張清楚的靜圖，永遠好過一段一直頓的影片。
+
+判斷「緩衝完」要用 `buffered` **單一連續段**（`b.length === 1`）。
+只看 `start(0)` 與 `end(length-1)` 的話**中間有洞也會判成完整**，
+Chromium 永遠只有一段所以測不出來，但 Safari 用 Range 很常產生多段。
+
+**不要用 `canplaythrough` / `readyState >= 4`** —— 規格上那只是「估計」，
+實測它跟 `playing` 每次都在同一毫秒觸發，等於完全沒等到。
+
+### ④ 預抓不會被 `<video>` 重用 —— 要自己握著 Blob
+
+2026-09-07 實測（限速 130KB/s、伺服器有送 ETag／Last-Modified）：
+
+```
+fetch() 預抓完      → <video> 播同一支，又跟伺服器要 2 次
+<video preload> 預熱 → 第二顆 <video> 仍重抓 1641ms
+```
+
+**v1.80〜v1.87 的預載因此完全沒有效果，只是在搶頻寬。**
+現在改成 `fetch()` → `blob()` → `createObjectURL()`，播放時餵 `blob:` URL
+（實測 460ms 上場、零網路請求、零卡頓）。
+
+**`blob:` 跟地雷 ① 的 SW 完全不同**：SW 是**合成**媒體回應，blob 是瀏覽器自己持有的位元組。
+但退路**必須用逾時而不是 `error`** —— iOS 的失效模式是「不報錯也永遠不會變成可播」。
+
+### ⑤ 背景預抓會跟玩家眼前的影片搶頻寬
+
+v1.69 曾經在播放中背景補快取，實測「Range 送出 64K」之後緊接著「無 Range 送出 335K」——
+**邊播邊多抓一整支**。預抓只能在真的閒著的時候做，而且要能立刻讓路。
+
+睿哥的節奏是**每 1.3〜1.5 秒換一個角色**，而一支要 1.3 秒才緩衝得完。
+恢復預抓的等待時間設太短（2.5 秒）等於他還在看就回來搶了 —— 現在是 6 秒。
+
+**預抓順序要跟選角格一樣**（照 `HEROES`，不是 manifest 順序）。
+順序錯了等於白預載：那 7 秒只抓得完 2 支，抓錯人就完全沒幫助。
+
+### ⑥ 換片會先畫出「上一支的最後一幀」
+
+`#stage-video` 是魔王降臨／命運排序／命運分隊共用的**同一顆 `<video>`**，
+換 `src` 之後 Safari 常常繼續畫上一支的最後一幀。
+而為了避免「全黑」又刻意提早顯示 —— 兩個各自合理的決定湊成 bug。
+
+現在等待期間**不讓 `<video>` 露臉**，改用 `.stage.poster-hold::after` 圖層頂著新片自己的 poster。
+
+### ⑦ 換素材的三個坑
+
+- **換影片一定要重製 poster**，否則會先閃一張舊角色圖。用 `tools/replace_hero_videos.py --finish` 會自動做。
+- **角色 `id` 跟顯示名對不起來**：`武鬥宗師` 是 **`dark_fighter`**，`monk` 是**僧侶**。
+  這是 v1.10 改名留下的陷阱，**換素材前一定要抽幀跟現行檔案並排比對**
+  （v1.8 兩隻弓箭手配對顛倒也是同一類錯誤）。
+- Sora 原片常夾一軌 mjpeg 封面圖，轉檔要明確 `-map 0:v:0 -map 0:a:0?`。
+
+### ⑧ 演出流程有 early return
+
+`presentBossRaid()` 曾因為 `if (isDoom) { … return; }` 排在播 final 之前，
+導致命運審判模式**整段最後一擊從來沒播過**。加新 ACT 前先確認它在所有 return 之前。
+
+### ⑨ CSS 的小陷阱
+
+- `.m-ico` 用 `font-size: 0` 藏住 RAID／ORDER／TEAM 這幾個字，符號是 `::before` 畫的。
+  **一改字級那幾個字就會跑出來蓋住卡片。**
+- `background-clip: text` ＋ `color: transparent`：底圖一旦不畫就**整個字消失，沒有中間狀態**。
+  v1.66 的勝利字樣就這樣在 iPhone 上不見了。（模式頁標題用的同款寫法**經睿哥截圖證實可用**，
+  差別可能在 `filter` 疊了幾層 —— 要用就照抄已知可用的那組。）
+- 結果頁要「一頁塞得下」靠的是**立繪 `flex: 0 1 auto` ＋ `aspect-ratio: 1/1` ＋ `width: auto`**
+  （高度被壓時寬度跟著縮，才不會變扁）。**不要加 `overflow: hidden`** ——
+  命運排序 6 人的名單會被切掉 37px 而且捲不到。
+
+---
+
+## 雲端 session 測不到的四件事
+
+**別把「Chromium 上沒問題」當成沒問題。** 這四項每一項都造成過誤判：
+
+| 測不到什麼 | 怎麼繞過 |
+|---|---|
+| **H.264 解碼** —— 所有 `.mp4` 都 `ERR_FAILED` | 用 ffmpeg 轉一支 VP9/WebM 當替身；`tools/slow_server.py --webm-dir` 會自動替換 |
+| **Range 回 206** —— `python3 -m http.server` 回的是 200 | 用 `tools/slow_server.py`（會正確回 206，並可 `--kbps` 限速） |
+| **安全區 `env(safe-area-inset-*)`** —— headless 全是 0 | 注入 `inset: 59px 8.8px 34px` 之類的值模擬 iPhone |
+| **快取行為** —— 少了 `ETag`／`Last-Modified` 就不會快取 206 | `slow_server.py` 已補上；自寫測試伺服器要記得 |
+
+**還有一個最基本的**：先看睿哥截圖上的 `.build-stamp` 對不對。
+他曾經卡在舊版五個版本，而我一直在查程式。
+
+---
+
+## 工具速查
+
+```bash
+python3 tools/replace_hero_videos.py <id> --finish --wait/--confirm/--attack/--final/--victory <檔案>
+        # 換角色影片：轉檔＋重製 poster＋版本號全套。--scan 可列出 Drive 素材夾
+python3 tools/recompress_videos.py --crf 32 [--kinds wait]   # 整批重壓（壓不贏會保留原檔）
+python3 tools/gen_asset_versions.py                          # 重算逐檔雜湊表
+python3 tools/sync_build.py                                  # 版本印記同步到 build.txt
+python3 tools/slow_server.py --port 8901 --kbps 130 --webm-dir <dir>   # 測試伺服器
+```
+
+**雲端讀不到 Google Drive**（連接器登入的是別的帳號）。素材要嘛睿哥貼到對話裡，要嘛在 Mac 上做。
+
+---
+
+## 還沒解決的
+
+- **選角待機片在真機上還會卡**。v1.88 改成 Blob 之後測試環境是 460ms／零卡頓，
+  但**尚未經睿哥實機確認**。若 blob 在他的 Safari 上也沒效，下一步是大幅縮小待機片。
+- 五個沒被引用的 JS 檔要不要刪。
+- `AGENT_HANDOFF.md` 的數字是 2026-08-01 的（當時 13 角、v0.94），**當背景讀，別當現況**。
+
+---
+
+## 維護這份文件
+
+**只寫「還會咬人」的東西。** 已經修掉而且不會再犯的，留在 `PROJECT_NOTES.md` 的日誌就好。
+每次踩到新的坑、或推翻上面某一條時，就更新這裡 —— 這份文件的價值在於**短**。
