@@ -160,6 +160,65 @@ window.HF_VideoPlayer = (() => {
    * 等待片只有約 168K（3.04s），整支等完在 130KB/s 上也才 1.3 秒，
    * 所以直接要求「全部緩衝完」——**確定的事實，跨瀏覽器都一樣**。
    */
+  /* ── 自己握住影片位元組（Blob）─────────────────────────────────────
+   *
+   * **為什麼非這樣不可**：2026-09-07 實測（限速 130KB/s、伺服器有送
+   * `ETag`／`Last-Modified`）——**預抓完全沒有被 `<video>` 重用**：
+   *   用 `fetch()` 預抓完 knight → `<video>` 播同一支，又跟伺服器要了 2 次
+   *   改用隱藏的 `<video preload="auto">` 預熱 → 第二顆 `<video>` 仍重抓 1641ms
+   * 也就是說 v1.80 以來的預抓只是在搶頻寬。要讓預載真的有用，
+   * **只剩一條路：位元組自己留著，播放時餵 `blob:` URL** ——
+   * blob 由瀏覽器自己供應，網路與 Service Worker 都不在播放路徑上。
+   *
+   * ⚠️ **不要跟 v1.69 那次的 Service Worker 混為一談**（專案鐵則第 6 條）。
+   * 那次是讓 SW 去合成媒體回應，iOS Safari 上會整個播不動。
+   * `blob:` 是完全不同的機制：瀏覽器自己持有的位元組，沒有攔截、沒有合成。
+   *
+   * ⚠️ **退路必須是「逾時」而不是「error」。** 上次 iOS 的失效模式是
+   * **不報錯、也永遠不會變成可播** —— 接 `error` 事件根本接不住。
+   * 這裡改成：blob 來源的影片若在 `BLOB_PROVE_MS` 內連第一幀都拿不到，
+   * 就**整場停用 blob 並改用原本的網路網址重載**。最差就是退回今天的行為。
+   */
+  const blobUrls = new Map();     // 正規網址 → blob: URL
+  let blobsOk = true;
+  const BLOB_PROVE_MS = 2500;     // blob 影片要在這段時間內至少拿到第一幀
+
+  /** 有 blob 就用 blob，否則用原本的網址。**必須同步**（setSource 是同步的）。 */
+  function blobSrc(src) {
+    return (blobsOk && blobUrls.get(src)) || src;
+  }
+
+  /** 把一支影片整個抓下來留著。已經有就直接回 true。 */
+  async function storeBlob(src, signal) {
+    if (!blobsOk || !src) return false;
+    if (blobUrls.has(src)) return true;
+    try {
+      const res = await fetch(src, signal ? { signal } : undefined);
+      if (!res || res.status !== 200) return false;
+      const blob = await res.blob();
+      if (!blob || !blob.size) return false;
+      if (blobUrls.has(src)) return true;           // 期間別人先存好了
+      blobUrls.set(src, URL.createObjectURL(blob));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function hasBlob(src) {
+    return blobsOk && blobUrls.has(src);
+  }
+
+  /** blob 播不動：整場停用並全部釋放，呼叫端會改用網路網址。 */
+  function disableBlobs() {
+    if (!blobsOk) return;
+    blobsOk = false;
+    for (const url of blobUrls.values()) {
+      try { URL.revokeObjectURL(url); } catch (_) {}
+    }
+    blobUrls.clear();
+  }
+
   function fullyBuffered(el) {
     if (!el || !el.duration || !isFinite(el.duration)) return false;
     const b = el.buffered;
@@ -445,8 +504,22 @@ window.HF_VideoPlayer = (() => {
       if (target.dataset.src === src) return;
       try { target.pause(); } catch (_) {}
       target.classList.remove("is-active");
+      // ⚠️ `dataset.src` **一律存正規網址**（不是 blob:）——
+      // `videos.find((v) => v.dataset.src === src)` 之類的比對到處都是。
       target.dataset.src = src;
-      target.src = src;
+      const actual = blobSrc(src);
+      target.src = actual;
+      if (actual !== src) {
+        // 逾時退路：blob 若連第一幀都給不出來（iOS 上是「不報錯也不會好」），
+        // 整場停用 blob 並用原本的網址重載一次。
+        setTimeout(() => {
+          if (target.dataset.src !== src) return;      // 已經換別支了
+          if (target.readyState >= 2 || !blobsOk) return;
+          disableBlobs();
+          target.src = src;
+          try { target.load(); } catch (_) {}
+        }, BLOB_PROVE_MS);
+      }
       try { target.load(); } catch (_) {}
     }
 
@@ -989,5 +1062,5 @@ window.HF_VideoPlayer = (() => {
     };
   }
 
-  return { create, loadManifest, videoUrl, versioned };
+  return { create, loadManifest, videoUrl, versioned, storeBlob, hasBlob };
 })();

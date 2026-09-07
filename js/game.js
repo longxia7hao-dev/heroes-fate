@@ -536,13 +536,15 @@
         // （實測看到同一支 dark_elf 被抓了兩次，進度原地踏步）
         if (pickWarmDone.has(id)) continue;
         pickWarmCtrl = new AbortController();
-        try {
-          const res = await fetch(vp.versioned(m.wait), { signal: pickWarmCtrl.signal });
-          // 一定要把 body 讀完，否則不會真的進 HTTP 快取
-          await res.arrayBuffer();
+        // ⚠️ **要存成 Blob，不能只是 `fetch()` 讓它進 HTTP 快取。**
+        // 2026-09-07 實測：預抓進 HTTP 快取之後，`<video>` 播同一支**還是會
+        // 重新跟伺服器要**（fetch 預抓、`<video preload>` 預熱都一樣）——
+        // v1.80〜v1.86 的預抓因此完全沒有效果，只是在搶頻寬。
+        // 存成 Blob 之後 `setSource()` 會餵 `blob:` URL，網路才真的不在路徑上。
+        if (await vp.storeBlob(vp.versioned(m.wait), pickWarmCtrl.signal)) {
           pickWarmDone.add(id);
-        } catch (_) {
-          if (token !== pickWarmToken) return;   // 是被中止的，交給計時器重啟
+        } else if (token !== pickWarmToken) {
+          return;                                // 是被中止的，交給計時器重啟
         }
         pickWarmCtrl = null;
       }
