@@ -58,6 +58,16 @@
     return `${b.length}段 ${seg.join(",")}/${(v.duration || 0).toFixed(1)}`;
   }
 
+  /**
+   * 選角舞台是 A／B 兩顆 `<video>` 交替（一顆在播、一顆在預熱下一支）。
+   * **兩顆的事件一定要分得出來**：2026-09-07 睿哥的截圖裡
+   * `playing` 之後 4ms 冒出的那個 `loadstart`，其實是另一顆在抓 confirm ——
+   * 沒有 A／B 標記時看起來像同一顆在重抓，會把人帶往完全錯的方向。
+   */
+  function tagOf(v) {
+    return v.classList.contains("vp-video-b") ? "B" : "A";
+  }
+
   const hooked = new WeakSet();
   function hook(v) {
     if (hooked.has(v)) return;
@@ -67,7 +77,7 @@
      "playing", "waiting", "stalled", "suspend", "error"].forEach((e) => {
       v.addEventListener(e, () => {
         const src = (v.currentSrc || "").startsWith("blob:") ? "blob" : "net";
-        log(`${e.padEnd(14)} ${src} rs${v.readyState} ${bufOf(v)}`);
+        log(`${tagOf(v)} ${e.padEnd(14)} ${src} rs${v.readyState} ${bufOf(v)}`);
       });
     });
   }
@@ -84,15 +94,16 @@
   // 每 100ms 掃一次：抓 STALL，並在狀態變動時記一行
   let last = null;
   setInterval(() => {
+    // 兩顆都要掛，否則預熱那顆的下載完全看不到（正是 v1.90 抓到的兇手）
+    document.querySelectorAll("#screen-pick .vp-video").forEach(hook);
     const v = activeVideo();
     if (!v) return;
-    hook(v);
     const src = (v.currentSrc || "").startsWith("blob:") ? "blob" : "net";
     const key = `${src}|${v.readyState}|${v.paused}|${bufOf(v)}`;
     const ct = +v.currentTime.toFixed(2);
     if (key !== last) {
       last = key;
-      log(`state          ${src} rs${v.readyState} ${v.paused ? "暫停" : "播放"} ${bufOf(v)}`);
+      log(`${tagOf(v)} state          ${src} rs${v.readyState} ${v.paused ? "暫停" : "播放"} ${bufOf(v)}`);
     }
     // 沒被暫停、readyState 夠、currentTime 卻不動 → 真的卡住了
     if (!v.paused && v.readyState >= 2) {

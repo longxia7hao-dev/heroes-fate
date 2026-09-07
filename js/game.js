@@ -258,7 +258,7 @@
     // 選角畫面閒著時才預抓待機片；離開就完全停手
     // 首頁／人數頁：網路完全閒著，早點開始抓（首頁讓 BGM 與背景圖先走）。
     // 選角頁：玩家正在點角色，要等他真的停下來才補（見 stopPickWarm）。
-    stopPickWarm({ home: 2000, count: 500, pick: 6000 }[name] ?? 0);
+    stopPickWarm({ home: 2000, count: 500, pick: 800 }[name] ?? 0);
     // 影片快取只在「玩家沒在等任何東西」的時候才補：主選單，以及看結果的時候。
     // 一離開就叫停，絕對不跟演出搶頻寬（見 sw.js 的 hf-warm）。
   }
@@ -481,21 +481,35 @@
   let pickWarmTimer = null;
 
   /**
-   * ⚠️ **恢復預抓的等待時間不能太短。**
+   * 停止背景預抓，`resumeMs` 之後再試。
    *
-   * 實測（限速 130KB/s）：點下一個角色後 5 秒內，網路上跑的是
-   * `wait/knight 224K` ＋ **`wait/dark_elf 169K`＋`wait/ranger 185K`** ——
-   * 後面兩支**玩家根本沒點**，卻在他正在等的那支影片還沒緩衝完時就開始搶頻寬。
-   * 在 130KB/s 上那是 2.7 秒的頻寬被拿走。
+   * ⚠️ **這個秒數不再是安全機制，只是「別馬上重試」。**
+   * 真正的把關是 `warmLineFree()`：預抓每抓一支之前都會問
+   * 「眼前的等待片緩衝完了沒」，沒完就不抓。
    *
-   * 原本 2.5 秒太短：睿哥實際的節奏是每 1.3〜1.5 秒換一個角色，
-   * 而一支影片要 1.3 秒才緩衝得完 —— 等於他還在看的時候預抓就回來搶了。
-   * 改成 6 秒：他真的停下來看某一位時才補，正在瀏覽時完全不打擾。
+   * 舊版（v1.88 以前）沒有閘門，只能靠這裡盲等 6 秒去猜玩家停下來了沒 ——
+   * 猜太短會搶頻寬，猜太長則整個選角過程幾乎預抓不到東西
+   * （2026-09-07 睿哥實機截圖：龍騎士與大魔導師都是 `net`，完全沒預抓到）。
+   * 有了閘門就兩邊都不必犧牲：**線一空下來就繼續，還在忙就一定不動。**
    */
-  function stopPickWarm(resumeMs = 6000) {
+  function stopPickWarm(resumeMs = 800) {
     pickWarmToken++;                       // 進行中的那一輪會自己收手
-    try { pickWarmCtrl?.abort(); } catch (_) {}
-    pickWarmCtrl = null;
+    /**
+     * ⚠️ **不要中止正在飛的那一支。**
+     *
+     * 舊版每次點卡片都 `abort()`。但一支等待片在睿哥的線上要 1.3 秒，
+     * 而他換角色的節奏是 1.3〜1.5 秒 —— 等於**每一支都在快抓完時被砍掉，
+     * 而且下一輪從 0 重抓**。這就是為什麼 2026-09-07 的實機截圖裡
+     * 龍騎士、大魔導師、僧侶全都是 `net`：預抓從頭到尾一支都沒完成過。
+     *
+     * 已經抓一半的東西丟掉是純虧損。改成：**只有真的離開可預抓的畫面
+     * （resumeMs === 0，例如進入演出）才中止**；選角中換角色只是「不要再
+     * 開新的」，在飛的那一支讓它抓完。要不要開新的由 `warmLineFree()` 把關。
+     */
+    if (resumeMs === 0) {
+      try { pickWarmCtrl?.abort(); } catch (_) {}
+      pickWarmCtrl = null;
+    }
     clearTimeout(pickWarmTimer);
     pickWarmTimer = null;
     if (resumeMs > 0) pickWarmTimer = setTimeout(startPickWarm, resumeMs);
@@ -509,6 +523,46 @@
    * 到了選角畫面才開始抓，第一支必定來不及。
    */
   const WARM_OK_SCREENS = new Set(["home", "count", "pick"]);
+
+  /**
+   * **這條線現在可以拿去做背景預抓嗎？**
+   *
+   * 2026-09-07 睿哥實機診斷（`?debug=1`）證實：他約 130KB/s 的線上
+   * **一次只能做一件事**。等待片自己每秒就需要約 55KB，旁邊只要再開一個
+   * 下載，兩支就都不夠 —— 這就是卡頓。原本靠「點卡片後等 6 秒」猜時機，
+   * 猜得再準也還是猜；改成**直接問影片緩衝完了沒有**。
+   *
+   * 檢查選角舞台上**每一顆**有來源的 `<video>`，不是只看目前顯示那顆：
+   * 走頭像後備路徑時影片仍在背景下載，卻不帶 `is-active`，只看顯示那顆會漏掉。
+   *
+   * `WARM_BLOCK_MAX_MS` 是保險：萬一有哪顆 video 卡在半成品狀態永遠緩衝不完，
+   * 不能讓預抓就此停擺（那會退回 v1.87 全部走網路的行為）。
+   */
+  const WARM_BLOCK_MAX_MS = 10000;
+  let warmBlockedSince = 0;
+
+  /** 等待片預抓還有沒有事情要做（`videoPlayer` 用它決定何時才能去碰 confirm）。 */
+  function waitWarmBusy() {
+    const ids = Array.isArray(HEROES) && HEROES.length ? HEROES : [];
+    if (!ids.length) return false;
+    return ids.some((h) => !pickWarmDone.has(h.id));
+  }
+  window.HF_VideoPlayer?.setWaitWarmProbe?.(waitWarmBusy);
+
+  function warmLineFree() {
+    if (document.body.dataset.screen !== "pick") return true;  // 沒在播等待片
+    const vp = window.HF_VideoPlayer;
+    if (!vp?.fullyBuffered) return true;
+    const busy = [...document.querySelectorAll("#screen-pick .vp-video")]
+      .some((el) => el.dataset.src && !vp.fullyBuffered(el));
+    if (!busy) {
+      warmBlockedSince = 0;
+      return true;
+    }
+    if (!warmBlockedSince) warmBlockedSince = Date.now();
+    // 卡太久就別再等了，寧可搶一點頻寬也不要完全不預抓
+    return Date.now() - warmBlockedSince > WARM_BLOCK_MAX_MS;
+  }
 
   function startPickWarm() {
     clearTimeout(pickWarmTimer);
@@ -535,6 +589,12 @@
         // 換畫面會讓這一輪重新開始；抓過的就跳過，否則每次都從第一支重抓
         // （實測看到同一支 dark_elf 被抓了兩次，進度原地踏步）
         if (pickWarmDone.has(id)) continue;
+        // ⚠️ **玩家眼前的等待片還在跟網路要位元組時，絕對不能開第二個下載。**
+        // 這是 v1.90 的核心規則，理由見 warmLineFree()。
+        if (!warmLineFree()) {
+          pickWarmTimer = setTimeout(startPickWarm, 400);
+          return;
+        }
         pickWarmCtrl = new AbortController();
         // ⚠️ **要存成 Blob，不能只是 `fetch()` 讓它進 HTTP 快取。**
         // 2026-09-07 實測：預抓進 HTTP 快取之後，`<video>` 播同一支**還是會
@@ -620,8 +680,8 @@
       const id = btn.dataset.id;
       if (!id) return;
       primedPointerId = id;
-      // 玩家要看這一支了，背景預抓立刻讓路（6 秒後再繼續，見 stopPickWarm 的說明）
-      stopPickWarm(6000);
+      // 玩家要看這一支了，背景預抓立刻讓路；之後由 warmLineFree() 決定何時能繼續
+      stopPickWarm(800);
       ensurePickVideo()?.prime?.(id, "wait")?.catch?.(() => {});
     }, { passive: true });
 
