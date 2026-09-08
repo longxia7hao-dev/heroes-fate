@@ -183,6 +183,36 @@ window.HF_VideoPlayer = (() => {
   let blobsOk = true;
   const BLOB_PROVE_MS = 2500;     // blob 影片要在這段時間內至少拿到第一幀
 
+  /**
+   * 等待片整支緩衝完之前，**不准開第二個下載**。這是預抓 confirm 的等待上限；
+   * 超過就乾脆不預抓（按「決定」時再抓，那時線是空的）。理由見
+   * `primeConfirmWhenSafe()` 的註解 —— 2026-09-07 睿哥實機診斷的結論。
+   */
+  const CONFIRM_PRIME_WAIT_MS = 20000;
+  const CONFIRM_PRIME_POLL_MS = 250;
+
+  /**
+   * `video.play()` 最多等這麼久。**這是「卡片永遠停在卡背」的保險。**
+   *
+   * 2026-09-07 21:09 睿哥的錄影：整整 12 秒、跨兩個角色，卡片一路是卡背，
+   * 連頭像後備都沒出現。原因在下面 `setSource()` 的 blob 逾時退路：
+   * blob 給不出第一幀時它會停用 blob、換網路網址重新 `load()`，
+   * **但當初那個 `play()` 的 promise 在 iOS 上可以永遠不 settle** ——
+   * 而整條揭露流程正 `await` 著它，後面的頭像後備一行都跑不到。
+   *
+   * 規格上 `play()` 沒有保證會 settle，所以**永遠不要裸 await 它**。
+   * 1.2 秒之後就往下走，讓頭像後備有機會把牌翻開；影片真的好了
+   * 還是會由 `playing` 事件或 `takeOverWithVideo()` 接手，什麼都沒少。
+   */
+  const PLAY_SETTLE_MS = 1200;
+
+  /**
+   * 由 `game.js` 注入：「等待片的背景預抓還有事情要做嗎？」
+   * 回 true 代表**還在抓**，這時候不准去碰 confirm。
+   */
+  let waitWarmBusy = null;
+  function setWaitWarmProbe(fn) { waitWarmBusy = fn; }
+
   /** 有 blob 就用 blob，否則用原本的網址。**必須同步**（setSource 是同步的）。 */
   function blobSrc(src) {
     return (blobsOk && blobUrls.get(src)) || src;
@@ -466,7 +496,9 @@ window.HF_VideoPlayer = (() => {
           resume?.catch?.(() => {});
         } catch (_) {}
         setState("playing");
-        if (pending.playKind === "wait") primeMedia(id, "confirm");
+        if (pending.playKind === "wait") {
+          primeConfirmWhenSafe(id, pending.target, pending.token);
+        }
         return true;
       }
 
@@ -518,6 +550,10 @@ window.HF_VideoPlayer = (() => {
           disableBlobs();
           target.src = src;
           try { target.load(); } catch (_) {}
+          // ⚠️ **一定要再 play() 一次。** 只換 src + load() 的話沒有人叫它動，
+          // 而原本那個 play() 的 promise 已經被這次 load 作廢了 ——
+          // 睿哥 2026-09-07 21:09 的錄影就是卡在這裡（卡片 12 秒沒翻面）。
+          try { target.play()?.catch?.(() => {}); } catch (_) {}
         }, BLOB_PROVE_MS);
       }
       try { target.load(); } catch (_) {}
@@ -536,6 +572,44 @@ window.HF_VideoPlayer = (() => {
         primedTarget = null;
         primedSrc = "";
       }
+    }
+
+    /**
+     * 等待片播起來之後才預抓 confirm —— **但排在等待片預抓的後面**。
+     *
+     * 2026-09-07 睿哥 iPhone 實機（`?debug=1`）四次點擊給出的事實：
+     *
+     *     武鬥宗師  blob → 影片 9ms 就上場，順的
+     *     僧侶      net  → 1089ms
+     *     大魔導師  net  →  990ms
+     *     龍騎士    net  →  974ms
+     *
+     * **卡的來源就是「沒預抓到」**：一支 110〜200K 的片在他約 130KB/s 的線上
+     * 要將近 1 秒，這是物理，除非事先抓好。有抓到 blob 的那支是 9ms。
+     *
+     * 而每點一個角色，舊版還會**再抓一支 confirm**（約 160K、實測佔線 1.1 秒）——
+     * 那是他**只是路過、根本沒按「決定」**的角色。瀏覽 10 個角色就白花 1.6MB，
+     * 比整個等待片庫（14 支共約 2.3MB）還多。那些頻寬本來該拿去預抓下一支等待片。
+     *
+     * 所以優先順序寫死：**等待片永遠排在 confirm 前面。**
+     *   ① 自己這支等待片要先整支緩衝完（blob 來源立刻滿足）
+     *   ② 而且背景的等待片預抓要沒事做了
+     * 兩個條件都成立才去預抓 confirm；`CONFIRM_PRIME_WAIT_MS` 內等不到就**不抓**。
+     *
+     * 不抓的代價很小：按「決定」時 `playOnce("confirm")` 本來就會等 canplay，
+     * 而且那時畫面上有「鎖定中…」。**一次鎖定多等一下，好過每次瀏覽都卡一秒。**
+     */
+    function primeConfirmWhenSafe(id, target, token) {
+      if (destroyed || !id || !target) return;
+      const deadline = Date.now() + CONFIRM_PRIME_WAIT_MS;
+      const tick = () => {
+        if (destroyed || token !== playToken || currentId !== id) return;
+        if (Date.now() > deadline) return;               // 放棄預抓，不是錯誤
+        const ready = fullyBuffered(target) && !(waitWarmBusy && waitWarmBusy());
+        if (ready) primeMedia(id, "confirm");
+        else setTimeout(tick, CONFIRM_PRIME_POLL_MS);
+      };
+      tick();
     }
 
     /**
@@ -765,7 +839,7 @@ window.HF_VideoPlayer = (() => {
           resume?.catch?.(() => {});
         } catch (_) {}
         setState("playing");
-        primeMedia(id, "confirm");
+        primeConfirmWhenSafe(id, target, token);
       };
 
       let shown = false;
@@ -780,19 +854,33 @@ window.HF_VideoPlayer = (() => {
         activateVideo(target, token, id);
         setState("playing");
         reveal.done(true);
-        if (playKind === "wait") primeMedia(id, "confirm");
+        if (playKind === "wait") primeConfirmWhenSafe(id, target, token);
       };
       if (!smoothWait) target.addEventListener("playing", showVideo, { once: true });
 
+      /**
+       * `play()` 可能永遠不 settle（見 `PLAY_SETTLE_MS`），所以一定要加時限。
+       * 回傳值代表「play() 真的成功了」，逾時的話是 false —— 但**不當成失敗**，
+       * 只是不再等它，讓後面的後備路徑有機會跑。
+       */
       const tryPlay = async (el) => {
         const p = el.play();
-        if (p && typeof p.then === "function") await p;
+        if (!p || typeof p.then !== "function") return true;
+        let settled = false;
+        p.then(() => { settled = true; }, () => { settled = true; });
+        await Promise.race([
+          p.catch(() => {}),
+          new Promise((r) => setTimeout(r, PLAY_SETTLE_MS)),
+        ]);
+        return settled;
       };
 
       try {
-        await tryPlay(target);
+        const played = await tryPlay(target);
         if (destroyed || token !== playToken) return reveal.done(false);
         if (!smoothWait) {
+          // play() 沒回來就別硬揭露一顆還不會動的影片，交給呼叫端自己的後備
+          if (!played && target.readyState < 2) return reveal.done(false);
           showVideo();
           return;
         }
@@ -1062,5 +1150,9 @@ window.HF_VideoPlayer = (() => {
     };
   }
 
-  return { create, loadManifest, videoUrl, versioned, storeBlob, hasBlob };
+  // fullyBuffered 給 game.js 的背景預抓當閘門用（見 warmLineFree()）
+  return {
+    create, loadManifest, videoUrl, versioned, storeBlob, hasBlob,
+    fullyBuffered, setWaitWarmProbe,
+  };
 })();
