@@ -556,7 +556,26 @@ window.HF_VideoPlayer = (() => {
         target.defaultPlaybackRate = 1;
         target.playbackRate = 1;
       } catch (_) {}
-      if (target.dataset.src === src) return;
+      /**
+       * 同一支片就不必重設 —— **但要先確認媒體真的還在。**
+       *
+       * 2026-09-08 睿哥：「有些第一次不卡，但選到別人後換回來卻卡了。」
+       * 這行就是原因。第一次選某角色時 `dataset.src` 不同，會走完整流程
+       * （含 `load()`）；**換走再換回來時網址一樣，這裡直接 return** ——
+       * 可是 **iOS Safari 會回收沒在播的 `<video>` 的解碼資源**
+       * （`readyState` 掉回 0 HAVE_NOTHING，`src` 屬性還在）。
+       * 媒體已經被收走了，卻再也沒有人呼叫 `load()`，只剩 `play()` 自己
+       * 去把整套重新弄回來 —— 那就是他感覺到的「換回來反而卡」。
+       *
+       * Chromium 不會這樣回收，所以雲端**完全測不出來**（回訪實測 353〜411ms
+       * 跟第一次一模一樣）。這是照他的描述在程式裡找出來的。
+       */
+      if (target.dataset.src === src) {
+        if (target.readyState === 0) {
+          try { target.load(); } catch (_) {}   // 媒體被回收了，重新取回
+        }
+        return;
+      }
       try { target.pause(); } catch (_) {}
       target.classList.remove("is-active");
       // ⚠️ `dataset.src` **一律存正規網址**（不是 blob:）——

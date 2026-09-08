@@ -40,6 +40,17 @@
       stallMs: 0,
       jankMax: 0, jankAt: 0, jankSum: 0,
       waits: 0, waitAt: [],        // 循環接點的重新緩衝（見下方 waiting 的處理）
+      /**
+       * 「換走再換回來就卡」的關鍵證據。
+       *
+       * iOS Safari 會回收沒在播的 `<video>` 的解碼資源（`readyState` 掉回 0，
+       * `src` 還在）。若真是這樣，**換回同一個角色時會看到 rsAtTap=0
+       * 而且 reloads>0**（必須整個重新載入）；如果回收理論錯了，
+       * 就會是 rsAtTap=4、reloads=0。**一張截圖就能分辨。**
+       */
+      rsAtTap: [...document.querySelectorAll("#screen-pick .vp-video")]
+        .map((v) => `${v.classList.contains("vp-video-b") ? "B" : "A"}${v.readyState}`).join(" "),
+      reloads: 0,
       netAt: performance.now(),
     };
     render();
@@ -98,6 +109,7 @@
       `影片卡頓  ${cur.stallMs}ms`,
       `畫面凍住  最久 ${cur.jankMax}ms @${cur.jankAt}ms ／ 合計 ${cur.jankSum}ms`,
       `循環頓    ${cur.waits} 次${cur.waitAt.length ? " @" + cur.waitAt.slice(-4).join(",") + "ms" : ""}`,
+      `點下當時  ${cur.rsAtTap}   之後重新載入 ${cur.reloads} 次`,
       `同時下載  ${dl.length ? dl.join("  ") : "無"}`,
     ].join("\n");
     logEl.textContent = lines.join("\n");
@@ -145,6 +157,7 @@
          * 這種「每 3 秒頓一下」跟載入完全無關，**改再多載入邏輯都不會消失**，
          * 所以一定要單獨數出來。
          */
+        if (cur && e === "loadstart") cur.reloads++;
         if (cur && (e === "waiting" || e === "stalled") && v.classList.contains("is-active")) {
           cur.waits++;
           cur.waitAt.push(Math.round(performance.now() - t0));
