@@ -115,6 +115,26 @@
     }
   }, 100);
 
+  /**
+   * **畫面本身有沒有頓** —— 這跟影片卡不卡是兩回事。
+   *
+   * 2026-09-08 睿哥回報還是會卡，但面板一次 `⚠ STALL` 都沒記到
+   * （等待片是 blob、rs4、整支緩衝完，`currentTime` 一直在前進）。
+   * 也就是說**頓的不是影片的播放，是主執行緒**：翻牌動畫的同一刻
+   * 手機還在下載並解碼第二支影片，畫面就會掉格。
+   *
+   * `requestAnimationFrame` 的間隔就是最直接的證據：正常 16〜17ms，
+   * 主執行緒被佔住就會跳成幾百 ms。這裡只記大於 120ms 的，免得洗版。
+   */
+  let lastFrame = performance.now();
+  const JANK_MS = 120;
+  (function frame(now) {
+    const gap = now - lastFrame;
+    lastFrame = now;
+    if (gap > JANK_MS) log(`🧊 畫面凍住 ${Math.round(gap)}ms`);
+    requestAnimationFrame(frame);
+  })(performance.now());
+
   // 網路實測：抓一支等待片，量真實下載速度
   window.addEventListener("load", () => {
     setTimeout(async () => {

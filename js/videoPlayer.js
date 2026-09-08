@@ -192,6 +192,27 @@ window.HF_VideoPlayer = (() => {
   const CONFIRM_PRIME_POLL_MS = 250;
 
   /**
+   * 閘門開了之後**還要再等這麼久**才去碰 confirm。
+   *
+   * 2026-09-08 睿哥的 `?debug=1` 截圖，三次點擊、三個角色，形狀完全一樣：
+   *
+   *     公主    295 A playing blob（翻牌）   297 B loadstart net → 1230ms 才好
+   *     斧戰士  295 A state   blob 播放      295 B loadstart net →  440ms
+   *     野蠻人  294 B state   blob 播放      295 A loadstart net → 1177ms
+   *
+   * **確定片的下載每一次都跟翻牌落在同一毫秒（誤差 0〜2ms）。** 那不是巧合，
+   * 是 `primeConfirmWhenSafe()` 的閘門在揭露的當下剛好開了。
+   *
+   * 等待片本身完全沒問題（blob、rs4、整支緩衝完、9ms 就在播，面板一次
+   * STALL 都沒記到）—— **頓的是手機在翻牌動畫的同一刻還要下載並解碼第二支影片**
+   * （`loadedmetadata`→`loadeddata` 是真的在解碼，不只是收位元組）。
+   *
+   * 所以閘門條件成立還不夠，**還要避開翻牌那段時間**。翻牌約 300ms，
+   * 這裡留 1.5 秒，確定演出完全結束、畫面靜下來之後才做背景的事。
+   */
+  const CONFIRM_PRIME_DELAY_MS = 1500;
+
+  /**
    * `video.play()` 最多等這麼久。**這是「卡片永遠停在卡背」的保險。**
    *
    * 2026-09-07 21:09 睿哥的錄影：整整 12 秒、跨兩個角色，卡片一路是卡背，
@@ -606,8 +627,16 @@ window.HF_VideoPlayer = (() => {
         if (destroyed || token !== playToken || currentId !== id) return;
         if (Date.now() > deadline) return;               // 放棄預抓，不是錯誤
         const ready = fullyBuffered(target) && !(waitWarmBusy && waitWarmBusy());
-        if (ready) primeMedia(id, "confirm");
-        else setTimeout(tick, CONFIRM_PRIME_POLL_MS);
+        if (!ready) {
+          setTimeout(tick, CONFIRM_PRIME_POLL_MS);
+          return;
+        }
+        // 條件成立了也**不要馬上做** —— 翻牌動畫正在跑，這時候多解一支影片
+        // 就是睿哥看到的那個頓。等畫面靜下來再說。
+        setTimeout(() => {
+          if (destroyed || token !== playToken || currentId !== id) return;
+          primeMedia(id, "confirm");
+        }, CONFIRM_PRIME_DELAY_MS);
       };
       tick();
     }
