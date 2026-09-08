@@ -123,8 +123,22 @@
     if (!v || typeof v.requestVideoFrameCallback !== "function") return;
     if (v.__hfFrameHook) return;
     v.__hfFrameHook = true;
-    let last = 0;
     const step = (now) => {
+      /**
+       * ⚠️ **兩種「不算掉格」的情況都要排除，否則數字會騙人。**
+       *
+       * 1. **影片還沒露臉**：翻牌動畫期間影片是 `opacity:0`，本來就不會有
+       *    畫格被畫出來。睿哥 2026-09-08 那張「379ms @364ms」就同時混了
+       *    「翻牌期間的空白」和「真正的播放中掉格」，分不出來。
+       * 2. **暫停期間**：無縫循環會把不在畫面上的那顆暫停，而**暫停中不會
+       *    觸發這個回呼** —— 基準值就停在三秒前，一交棒回來就被算成一次
+       *    2833ms 的假大跳（實測 20 秒會生出 7 筆全是假的）。
+       *
+       * 所以基準值存在元素上，由 100ms 那圈輪詢在「不是 active」時清掉 ——
+       * 不能只靠回呼自己清，因為它在該清的時候正好不會被呼叫。
+       */
+      const last = v.__hfFrameLast || 0;
+      v.__hfFrameLast = now;
       if (last && cur && v.classList.contains("is-active")) {
         const gap = now - last;
         if (gap > 100) {                 // 一格 33ms，超過 100ms 就是掉了好幾格
@@ -135,7 +149,6 @@
           }
         }
       }
-      last = now;
       try { v.requestVideoFrameCallback(step); } catch (_) {}
     };
     try { v.requestVideoFrameCallback(step); } catch (_) {}
@@ -222,6 +235,10 @@
   setInterval(() => {
     document.querySelectorAll("#screen-pick .vp-video").forEach(hook);
     document.querySelectorAll("#screen-pick .vp-video").forEach(watchFrames);
+    // 不在畫面上的那顆把基準清掉（見 watchFrames 的說明 —— 暫停中不會有回呼）
+    document.querySelectorAll("#screen-pick .vp-video").forEach((v) => {
+      if (!v.classList.contains("is-active")) v.__hfFrameLast = 0;
+    });
     const v = activeVideo();
     if (!v || !cur) return;
     // 掉格：跟這一次點擊開始時的數字相減

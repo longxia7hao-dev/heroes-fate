@@ -667,6 +667,31 @@ window.HF_VideoPlayer = (() => {
      */
     const LOOP_LEAD_S = 0.25;      // 提前這麼久把夥伴叫起來
     const LOOP_TICK_MS = 50;
+    /**
+     * **夥伴那顆要等這麼久才開始準備。**
+     *
+     * 2026-09-08 睿哥的 `?debug=1` 截圖第一次量到「頓」本身：
+     *
+     *     大魔導師  畫格間隔 超過 100ms 1 次  最久 379ms @364ms
+     *     武鬥宗師  畫格間隔 超過 100ms 1 次  最久 398ms @366ms
+     *
+     * 將近 0.4 秒沒有新畫格被畫出來。而那個窗口裡：
+     *
+     *       9  A playing        blob rs4   ← 影片 9ms 就準備好了
+     *     293  A playing        blob rs4   ← 翻牌揭露
+     *     294  B loadstart      blob rs0   ← 夥伴開始載入＋解碼
+     *     340  B canplaythrough blob rs4
+     *
+     * **是 v1.95 的無縫循環自己。** v1.93 才剛把 confirm 的預抓從翻牌那一刻
+     * 移開（`CONFIRM_PRIME_DELAY_MS`），v1.95 又把夥伴的解碼放回同一個位置。
+     *
+     * **夥伴要到第 3 秒（第一個循環接點）才用得到**，沒有任何理由在揭露當下
+     * 就去準備它。1.2 秒：離翻牌夠遠，離 3.0 秒的接點也還有 1.8 秒餘裕。
+     *
+     * ⚠️ 通則（`BRAIN.md` 地雷區 ⑪）：**條件成立不等於現在就該做。**
+     * 任何背景準備都要避開演出正在跑的那幾百毫秒。
+     */
+    const LOOP_PARTNER_DELAY_MS = 1200;
     let loopTimer = null;
 
     function stopSeamlessLoop() {
@@ -693,17 +718,33 @@ window.HF_VideoPlayer = (() => {
        * （會有循環頓，但不會更糟），等預抓補上之後下一次選這個角色就順了。
        */
       if (!hasBlob(src)) return;
-      // 夥伴放同一支、停在開頭；先不播（`preload` 會把第一幀解好）
-      setSource(partner, src, { loop: false, preload: "auto" });
-      try { partner.pause(); } catch (_) {}
+
+      // 夥伴的載入＋解碼**不能壓在翻牌那一刻**（見 LOOP_PARTNER_DELAY_MS）。
+      // 它要到第 3 秒才用得到，等演出結束、畫面靜下來再準備。
+      setTimeout(() => {
+        if (destroyed || token !== playToken) return;
+        const p2 = videos.find((v) => v !== video);
+        if (!p2) return;
+        setSource(p2, src, { loop: false, preload: "auto" });
+        try { p2.pause(); } catch (_) {}
+      }, LOOP_PARTNER_DELAY_MS);
 
       loopTimer = setInterval(() => {
         if (destroyed || token !== playToken) return stopSeamlessLoop();
         const live = video;
         const idle = videos.find((v) => v !== live);
         if (!live || !idle) return stopSeamlessLoop();
-        // 來源被換掉（選了別的角色／播確定片）就收手，交還控制權
-        if (live.dataset.src !== src || idle.dataset.src !== src) return stopSeamlessLoop();
+        // 看得見的那顆換了來源＝選了別的角色／播確定片，收手交還控制權
+        if (live.dataset.src !== src) return stopSeamlessLoop();
+        /**
+         * ⚠️ 夥伴還沒備好**只是還沒輪到它，不是「該收手」**。
+         *
+         * 夥伴的載入被刻意延後到 `LOOP_PARTNER_DELAY_MS`（避開翻牌），
+         * 所以前 1.2 秒 `idle.dataset.src` 本來就不會等於 `src`。
+         * 這裡若跟著 `stopSeamlessLoop()`，交棒會在第一次輪詢就把自己關掉 ——
+         * 實測就是 `交棒次數 0`、循環頓整個回來。**跳過就好，不要收手。**
+         */
+        if (idle.dataset.src !== src) return;
         if (!live.classList.contains("is-active")) return;
         if (!live.duration || !isFinite(live.duration)) return;
         if (live.currentTime < live.duration - LOOP_LEAD_S) return;
