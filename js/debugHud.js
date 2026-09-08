@@ -1,53 +1,123 @@
 /**
  * 選角影片診斷面板 —— **只在網址帶 `?debug=1` 時啟用，平常完全不執行**。
  *
- * 為什麼需要它：雲端 session 沒有 Safari、解不了 H.264、也接不到睿哥的手機，
- * 所以「影片在他機器上到底怎麼卡的」一直只能從螢幕錄影反推。
- * 這個面板把 `<video>` 的真實狀態直接畫在畫面上，他截一張圖就是第一手事實。
+ * ## 為什麼是「摘要」而不是「日誌」
  *
- * 顯示的每一項都是為了分辨一種可能：
- *   src=blob/net   Blob 有沒有真的被用到（v1.88 的重點）
- *   rs             readyState：0 沒東西 / 1 有中繼資料 / 2 有第一幀 / 3 可播 / 4 估計可播完
- *   buf            緩衝了幾段、涵蓋到哪裡 —— **多段代表中間有洞**（Safari 走 Range 常見）
- *   事件序列        playing / waiting / stalled 的先後，卡住時一定看得到 waiting
- *   STALL          真正的卡頓：沒被暫停、currentTime 卻不前進
+ * 第一版（v1.89）是一份會滾動的事件日誌。2026-09-08 睿哥回報還是卡、附了四張
+ * 截圖，**其中三張根本沒有面板、第四張只剩最後五行** —— 他按下去的那一刻早就
+ * 捲掉了。要靠人「在正確的時機截圖」本身就是壞設計。
+ *
+ * 所以現在最上面永遠釘著**上一次點擊的完整結論**：不管他隔多久才截圖，
+ * 那張圖都帶著答案。下面才是事件序列（給需要細看順序時用）。
+ *
+ * ## 每一項在分辨什麼
+ *
+ *   翻牌       從手指按下到畫面真的動起來 —— **這就是他說的「卡」的長度**
+ *   來源       blob＝預抓有中（本機供應）／net＝當場跟伺服器要
+ *   影片卡頓   影片自己播不動的時間（沒暫停、readyState 夠、currentTime 不前進）
+ *   畫面凍住   主執行緒被佔住（rAF 間隔），**跟影片卡頓是兩回事** ——
+ *              2026-09-08 就是影片一次卡頓都沒有、但畫面在掉格
+ *   同時下載   那一刻網路上還在跑什麼（背景工作壓到演出就是這樣看出來的）
  */
 (() => {
   "use strict";
   if (!/[?&]debug=1/.test(location.search)) return;
 
-  const MAX_LINES = 14;
+  const LOG_LINES = 8;
+  const JANK_MS = 120;        // rAF 間隔超過這個就算掉格
   const lines = [];
-  let box = null;
+  let box = null, sumEl = null, logEl = null;
   let t0 = performance.now();
+
+  /** 這一次點擊的統計，每次點角色歸零 */
+  let cur = null;
+  function reset(id) {
+    t0 = performance.now();
+    lines.length = 0;
+    cur = {
+      id,
+      flipMs: null, src: "?",
+      stallMs: 0,
+      jankMax: 0, jankAt: 0, jankSum: 0,
+      waits: 0, waitAt: [],        // 循環接點的重新緩衝（見下方 waiting 的處理）
+      netAt: performance.now(),
+    };
+    render();
+  }
 
   function ensureBox() {
     if (box) return box;
     box = document.createElement("div");
-    box.id = "hf-debug-hud";
+    box.id = "hf-debug-hud";   // 回歸測試靠這個 id 確認「不帶參數時完全不存在」
+    // ⚠️ 摘要釘上方、事件日誌釘下方，**中間讓出來給立繪** ——
+    // 睿哥要一邊看動畫一邊截圖，面板把舞台蓋住就等於沒得判斷。
     box.style.cssText = [
       "position:fixed", "left:4px", "right:4px", "top:4px", "z-index:99999",
-      "font:11px/1.35 ui-monospace,Menlo,monospace", "color:#9effa1",
-      "background:rgba(0,0,0,.86)", "border:1px solid #3a5",
-      "padding:5px 6px", "border-radius:6px", "white-space:pre-wrap",
-      "pointer-events:none", "max-height:52vh", "overflow:hidden",
+      "font:11px/1.4 ui-monospace,Menlo,monospace",
+      "pointer-events:none",
     ].join(";");
+    sumEl = document.createElement("div");
+    sumEl.style.cssText = [
+      "color:#fff", "background:rgba(120,0,0,.92)", "border:2px solid #f55",
+      "padding:6px 7px", "border-radius:6px", "white-space:pre-wrap",
+      "font-weight:600",
+    ].join(";");
+    logEl = document.createElement("div");
+    logEl.style.cssText = [
+      "position:fixed", "left:4px", "right:4px", "bottom:4px", "z-index:99999",
+      "font:10px/1.35 ui-monospace,Menlo,monospace",
+      "color:#9effa1", "background:rgba(0,0,0,.86)", "border:1px solid #3a5",
+      "padding:4px 6px", "border-radius:6px", "white-space:pre-wrap",
+      "pointer-events:none", "max-height:30vh", "overflow:hidden",
+    ].join(";");
+    box.appendChild(sumEl);
     document.body.appendChild(box);
+    document.body.appendChild(logEl);
     return box;
+  }
+
+  /** 這次點擊之後、網路上跑過哪些影片（用 Performance API，不必攔截 fetch） */
+  function netSince(ms) {
+    try {
+      return performance.getEntriesByType("resource")
+        .filter((e) => e.startTime >= ms && /\/videos\/.*\.(mp4|webm)/.test(e.name))
+        .map((e) => {
+          const n = e.name.split("/mobile/")[1] || e.name.split("/").pop();
+          return `${n.split("?")[0]} @${Math.round(e.startTime - ms)}ms`;
+        });
+    } catch (_) { return []; }
+  }
+
+  function render() {
+    ensureBox();
+    if (!cur) { sumEl.textContent = "診斷面板已啟動 —— 點一個角色開始"; return; }
+    const dl = netSince(cur.netAt);
+    sumEl.textContent = [
+      `【${cur.id}】`,
+      `翻牌      ${cur.flipMs == null ? "還沒…" : cur.flipMs + "ms"}   來源 ${cur.src}`,
+      `影片卡頓  ${cur.stallMs}ms`,
+      `畫面凍住  最久 ${cur.jankMax}ms @${cur.jankAt}ms ／ 合計 ${cur.jankSum}ms`,
+      `循環頓    ${cur.waits} 次${cur.waitAt.length ? " @" + cur.waitAt.slice(-4).join(",") + "ms" : ""}`,
+      `同時下載  ${dl.length ? dl.join("  ") : "無"}`,
+    ].join("\n");
+    logEl.textContent = lines.join("\n");
   }
 
   function log(s) {
     lines.push(`${String(Math.round(performance.now() - t0)).padStart(5)} ${s}`);
-    while (lines.length > MAX_LINES) lines.shift();
-    ensureBox().textContent = lines.join("\n");
+    while (lines.length > LOG_LINES) lines.shift();
+    render();
   }
 
-  /** 目前選角舞台上、真的在用的那顆 video */
+  /** 選角舞台是 A／B 兩顆 <video> 交替，事件一定要分得出來是哪一顆。 */
+  function tagOf(v) {
+    return v.classList.contains("vp-video-b") ? "B" : "A";
+  }
+
   function activeVideo() {
-    return [...document.querySelectorAll("#screen-pick .vp-video")]
-      .find((v) => v.classList.contains("is-active") && v.dataset.src)
-      || [...document.querySelectorAll("#screen-pick .vp-video")]
-        .find((v) => v.dataset.src);
+    const all = [...document.querySelectorAll("#screen-pick .vp-video")];
+    return all.find((v) => v.classList.contains("is-active") && v.dataset.src)
+        || all.find((v) => v.dataset.src);
   }
 
   function bufOf(v) {
@@ -58,84 +128,72 @@
     return `${b.length}段 ${seg.join(",")}/${(v.duration || 0).toFixed(1)}`;
   }
 
-  /**
-   * 選角舞台是 A／B 兩顆 `<video>` 交替（一顆在播、一顆在預熱下一支）。
-   * **兩顆的事件一定要分得出來**：2026-09-07 睿哥的截圖裡
-   * `playing` 之後 4ms 冒出的那個 `loadstart`，其實是另一顆在抓 confirm ——
-   * 沒有 A／B 標記時看起來像同一顆在重抓，會把人帶往完全錯的方向。
-   */
-  function tagOf(v) {
-    return v.classList.contains("vp-video-b") ? "B" : "A";
-  }
-
   const hooked = new WeakSet();
   function hook(v) {
     if (hooked.has(v)) return;
     hooked.add(v);
-    // waiting／stalled 是「餓死」的直接證據；suspend 代表瀏覽器自己停止下載
     ["loadstart", "loadedmetadata", "loadeddata", "canplay", "canplaythrough",
      "playing", "waiting", "stalled", "suspend", "error"].forEach((e) => {
       v.addEventListener(e, () => {
         const src = (v.currentSrc || "").startsWith("blob:") ? "blob" : "net";
+        /**
+         * `waiting` ＝ 影片自己說「我沒東西可播了」。
+         *
+         * ⚠️ **就算整支都在本機 blob 裡也會發生** —— 等待片是 3 秒 `loop`，
+         * WebKit 每次繞回開頭都會掉回 rs1 重新緩衝一次
+         * （2026-09-08 在雲端量到 12ms，但那是桌機；手機可能大得多）。
+         * 這種「每 3 秒頓一下」跟載入完全無關，**改再多載入邏輯都不會消失**，
+         * 所以一定要單獨數出來。
+         */
+        if (cur && (e === "waiting" || e === "stalled") && v.classList.contains("is-active")) {
+          cur.waits++;
+          cur.waitAt.push(Math.round(performance.now() - t0));
+        }
         log(`${tagOf(v)} ${e.padEnd(14)} ${src} rs${v.readyState} ${bufOf(v)}`);
       });
     });
   }
 
-  // 點角色＝一次新的觀察，把時間軸歸零
   document.addEventListener("click", (e) => {
     const card = e.target.closest?.("#hero-grid .hero-card[data-id]");
     if (!card) return;
-    t0 = performance.now();
-    lines.length = 0;
+    reset(card.dataset.id);
     log(`── 點 ${card.dataset.id} ──`);
   }, true);
 
-  // 每 100ms 掃一次：抓 STALL，並在狀態變動時記一行
-  let last = null;
+  // 影片自己播不動 → 影片卡頓
   setInterval(() => {
-    // 兩顆都要掛，否則預熱那顆的下載完全看不到（正是 v1.90 抓到的兇手）
     document.querySelectorAll("#screen-pick .vp-video").forEach(hook);
     const v = activeVideo();
-    if (!v) return;
+    if (!v || !cur) return;
     const src = (v.currentSrc || "").startsWith("blob:") ? "blob" : "net";
-    const key = `${src}|${v.readyState}|${v.paused}|${bufOf(v)}`;
-    const ct = +v.currentTime.toFixed(2);
-    if (key !== last) {
-      last = key;
-      log(`${tagOf(v)} state          ${src} rs${v.readyState} ${v.paused ? "暫停" : "播放"} ${bufOf(v)}`);
-    }
-    // 沒被暫停、readyState 夠、currentTime 卻不動 → 真的卡住了
-    if (!v.paused && v.readyState >= 2) {
-      if (v.__hfLastCt === ct) {
-        v.__hfStall = (v.__hfStall || 0) + 100;
-        if (v.__hfStall % 400 === 0) log(`⚠ STALL ${v.__hfStall}ms @${ct}s ${bufOf(v)}`);
-      } else v.__hfStall = 0;
+    if (!v.paused && v.readyState >= 2 && v.currentTime > 0) {
+      if (cur.flipMs == null) {            // 畫面第一次真的動起來
+        cur.flipMs = Math.round(performance.now() - t0);
+        cur.src = src;
+      }
+      const ct = +v.currentTime.toFixed(2);
+      if (v.__hfLastCt === ct) cur.stallMs += 100;
       v.__hfLastCt = ct;
     }
+    render();
   }, 100);
 
-  /**
-   * **畫面本身有沒有頓** —— 這跟影片卡不卡是兩回事。
-   *
-   * 2026-09-08 睿哥回報還是會卡，但面板一次 `⚠ STALL` 都沒記到
-   * （等待片是 blob、rs4、整支緩衝完，`currentTime` 一直在前進）。
-   * 也就是說**頓的不是影片的播放，是主執行緒**：翻牌動畫的同一刻
-   * 手機還在下載並解碼第二支影片，畫面就會掉格。
-   *
-   * `requestAnimationFrame` 的間隔就是最直接的證據：正常 16〜17ms，
-   * 主執行緒被佔住就會跳成幾百 ms。這裡只記大於 120ms 的，免得洗版。
-   */
+  // 主執行緒被佔住 → 畫面凍住。**跟影片卡頓是兩回事，一定要分開量。**
   let lastFrame = performance.now();
-  const JANK_MS = 120;
   (function frame(now) {
     const gap = now - lastFrame;
     lastFrame = now;
-    if (gap > JANK_MS) log(`🧊 畫面凍住 ${Math.round(gap)}ms`);
+    if (gap > JANK_MS && cur) {
+      const at = Math.round(now - t0);
+      cur.jankSum += Math.round(gap);
+      if (gap > cur.jankMax) { cur.jankMax = Math.round(gap); cur.jankAt = at; }
+      log(`🧊 畫面凍住 ${Math.round(gap)}ms`);
+    }
     requestAnimationFrame(frame);
   })(performance.now());
 
-  // 網路實測：抓一支等待片，量真實下載速度
+  // 載入後量一次真實下載速度
   window.addEventListener("load", () => {
     setTimeout(async () => {
       try {
@@ -152,5 +210,5 @@
     }, 1500);
   });
 
-  log("診斷面板已啟動 —— 點一個角色開始");
+  render();
 })();
