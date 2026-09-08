@@ -161,6 +161,46 @@ window.HF_Audio = (() => {
   let duckTimer = 0;
   const rawCache = new Map();
   const bufferCache = new Map();
+  /**
+   * **解碼後的角色 BGM 只留最近幾支。**
+   *
+   * 睿哥 2026-09-08：「一開始都沒有卡，但切換幾次後就開始卡了。」
+   * 這種「越用越卡」的形狀就是有東西在累積 —— 算出來是這個：
+   *
+   *   角色 BGM 14 支（各 12 秒、44.1kHz 立體聲）解碼後  **56.6 MB**
+   *   場景 BGM 解碼後                                    33.7 MB
+   *   全部瀏覽過之後合計                                 **90.4 MB**
+   *
+   * `bufferCache` 原本**沒有上限也沒有淘汰**，每點一個新角色就多解碼一支
+   * 4.2MB 的 `AudioBuffer` 並永遠留著。iPhone 上一個分頁漲到 90MB 解碼音訊、
+   * 旁邊還有兩支影片在解碼 —— iOS 就開始回收與降頻，那就是他感覺到的
+   * 「切換幾次後才開始卡」。
+   *
+   * 只淘汰**角色 BGM**：場景 BGM 一直在用、音效又小又頻繁，都不能動。
+   * 被淘汰的只是「解碼後」的版本，壓縮原檔還在 `rawCache`（14 支才 2MB），
+   * 換回同一個角色時是**本機重新解碼，不會再上網**。
+   * 3 支：涵蓋「上一個／這一個／下一個」，上限約 12.7MB。
+   */
+  const HERO_BGM_CACHE_MAX = 3;
+  const heroBgmLru = [];
+  const isHeroBgmUrl = (url) => url.includes("/heroes/bgm/");
+
+  function touchHeroBgm(url) {
+    if (!isHeroBgmUrl(url)) return;
+    const at = heroBgmLru.indexOf(url);
+    if (at >= 0) heroBgmLru.splice(at, 1);
+    heroBgmLru.push(url);
+    while (heroBgmLru.length > HERO_BGM_CACHE_MAX) {
+      const drop = heroBgmLru.shift();
+      // 正在播的那支不能丟（丟了下次還要重解）；而且已經在播的
+      // AudioBufferSourceNode 本來就自己握著 buffer，播放不受影響。
+      if (drop === musicTracks[currentMusic]) {
+        heroBgmLru.push(drop);
+        break;
+      }
+      bufferCache.delete(drop);
+    }
+  }
   const activeGroups = new Map();
   const cooldowns = new Map();
   let corePreloadPromise = null;
@@ -316,6 +356,7 @@ window.HF_Audio = (() => {
   async function getBuffer(url) {
     const ctx = ensureContext();
     if (!ctx) return null;
+    touchHeroBgm(url);          // 角色 BGM 要記使用順序並淘汰舊的，見上方
     if (!bufferCache.has(url)) {
       bufferCache.set(
         url,
@@ -743,6 +784,15 @@ window.HF_Audio = (() => {
     duck,
     getSettings,
     getStatus,
+    /**
+     * 唯讀統計，給診斷面板與回歸測試確認**解碼後的音訊真的有被壓住**。
+     * `heroBgm` 應該永遠不超過 `HERO_BGM_CACHE_MAX`。
+     */
+    stats: () => ({
+      decoded: bufferCache.size,
+      heroBgm: heroBgmLru.length,
+      raw: rawCache.size,
+    }),
     clearHeroMusic,
     playHeroAttack,
     playHeroMusic,

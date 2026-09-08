@@ -167,6 +167,7 @@
       `點下當時  ${cur.rsAtTap}   之後重新載入 ${cur.reloads} 次`,
       `掉格      ${cur.dropped} / ${cur.total} 格`,
       `畫格間隔  超過 100ms ${cur.frameGaps} 次   最久 ${cur.frameGapMax}ms @${cur.frameGapAt}ms`,
+      `音訊快取  ${(() => { const q = window.HF_Audio?.stats?.(); return q ? `解碼 ${q.decoded} 支（角色 BGM ${q.heroBgm}）` : "—"; })()}`,
       `同時下載  ${dl.length ? dl.join("  ") : "無"}`,
     ].join("\n");
     logEl.textContent = lines.join("\n");
