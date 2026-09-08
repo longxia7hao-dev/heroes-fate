@@ -481,6 +481,17 @@ window.HF_Audio = (() => {
       outgoing.gain.gain.linearRampToValueAtTime(0.0001, now + fadeSeconds);
       setTimeout(() => {
         try { outgoing.source.stop(); } catch (_) {}
+        /**
+         * ⚠️ **一定要 `disconnect()`，只 `stop()` 不夠。**
+         *
+         * 舊版只停掉來源，那顆 `GainNode` 卻**永遠掛在 `musicBus` 上**。
+         * 選角每換一個角色就換一次 BGM，等於**每點一個角色就在音訊圖上
+         * 留下一顆死節點** —— 一輪 14 角就是 14 顆，而且整個 session 只增不減。
+         * 睿哥 2026-09-08：「第一次點都不會，後就開始卡了」——
+         * 會**隨著點擊次數累積**的東西就這一類，所以先清掉。
+         */
+        try { outgoing.source.disconnect(); } catch (_) {}
+        try { outgoing.gain.disconnect(); } catch (_) {}
       }, fadeSeconds * 1000 + 120);
     }
   }

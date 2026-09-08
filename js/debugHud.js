@@ -51,6 +51,25 @@
       rsAtTap: [...document.querySelectorAll("#screen-pick .vp-video")]
         .map((v) => `${v.classList.contains("vp-video-b") ? "B" : "A"}${v.readyState}`).join(" "),
       reloads: 0,
+      /**
+       * **真正的「畫面順不順」。**
+       *
+       * 2026-09-08 睿哥：「你能不能認真測試」—— 他說得對，我一直在量
+       * 「多久翻牌」跟「`currentTime` 有沒有前進」，**這兩個都抓不到掉格**：
+       * 影片可以 `currentTime` 正常前進、主執行緒也不忙，而合成器在丟畫格，
+       * 看起來就是頓。
+       *
+       * ⚠️ 這兩項**在雲端量不出來**（headless Chromium 不做真正的合成，
+       * `totalVideoFrames` 回 -1／0），**但在 iOS Safari 上是真的數字** ——
+       * 所以這一欄只有睿哥的截圖能回答。
+       *
+       *   掉格      `getVideoPlaybackQuality()`：解出來卻沒被畫出去的畫格
+       *   畫格間隔  `requestVideoFrameCallback()`：**真的被畫到螢幕上**的
+       *             那一格與前一格差多久。3 秒 30fps 的片正常約 33ms，
+       *             一旦看到 100ms 以上就是肉眼看得到的頓。
+       */
+      q0: null, dropped: 0, total: 0,
+      frameGapMax: 0, frameGapAt: 0, frameGaps: 0,
       netAt: performance.now(),
     };
     render();
@@ -99,6 +118,29 @@
     } catch (_) { return []; }
   }
 
+  /** 掛上「真的被畫出來的那一格」的回呼（Safari 15.4+／Chrome 支援） */
+  function watchFrames(v) {
+    if (!v || typeof v.requestVideoFrameCallback !== "function") return;
+    if (v.__hfFrameHook) return;
+    v.__hfFrameHook = true;
+    let last = 0;
+    const step = (now) => {
+      if (last && cur && v.classList.contains("is-active")) {
+        const gap = now - last;
+        if (gap > 100) {                 // 一格 33ms，超過 100ms 就是掉了好幾格
+          cur.frameGaps++;
+          if (gap > cur.frameGapMax) {
+            cur.frameGapMax = Math.round(gap);
+            cur.frameGapAt = Math.round(now - t0);
+          }
+        }
+      }
+      last = now;
+      try { v.requestVideoFrameCallback(step); } catch (_) {}
+    };
+    try { v.requestVideoFrameCallback(step); } catch (_) {}
+  }
+
   function render() {
     ensureBox();
     if (!cur) { sumEl.textContent = "診斷面板已啟動 —— 點一個角色開始"; return; }
@@ -110,6 +152,8 @@
       `畫面凍住  最久 ${cur.jankMax}ms @${cur.jankAt}ms ／ 合計 ${cur.jankSum}ms`,
       `循環頓    ${cur.waits} 次${cur.waitAt.length ? " @" + cur.waitAt.slice(-4).join(",") + "ms" : ""}`,
       `點下當時  ${cur.rsAtTap}   之後重新載入 ${cur.reloads} 次`,
+      `掉格      ${cur.dropped} / ${cur.total} 格`,
+      `畫格間隔  超過 100ms ${cur.frameGaps} 次   最久 ${cur.frameGapMax}ms @${cur.frameGapAt}ms`,
       `同時下載  ${dl.length ? dl.join("  ") : "無"}`,
     ].join("\n");
     logEl.textContent = lines.join("\n");
@@ -177,8 +221,18 @@
   // 影片自己播不動 → 影片卡頓
   setInterval(() => {
     document.querySelectorAll("#screen-pick .vp-video").forEach(hook);
+    document.querySelectorAll("#screen-pick .vp-video").forEach(watchFrames);
     const v = activeVideo();
     if (!v || !cur) return;
+    // 掉格：跟這一次點擊開始時的數字相減
+    try {
+      if (typeof v.getVideoPlaybackQuality === "function") {
+        const q = v.getVideoPlaybackQuality();
+        if (!cur.q0) cur.q0 = { d: q.droppedVideoFrames, t: q.totalVideoFrames };
+        cur.dropped = q.droppedVideoFrames - cur.q0.d;
+        cur.total = q.totalVideoFrames - cur.q0.t;
+      }
+    } catch (_) {}
     const src = (v.currentSrc || "").startsWith("blob:") ? "blob" : "net";
     if (!v.paused && v.readyState >= 2 && v.currentTime > 0) {
       if (cur.flipMs == null) {            // 畫面第一次真的動起來
