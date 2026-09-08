@@ -455,6 +455,7 @@ window.HF_VideoPlayer = (() => {
       primedTarget = null;
       primedSrc = "";
       const token = ++playToken;
+      stopSeamlessLoop();   // 有新東西接手，交棒循環一律先收手
       pendingReveal = null;
       currentId = id;
       return queueFallback(id, token);
@@ -518,6 +519,7 @@ window.HF_VideoPlayer = (() => {
         } catch (_) {}
         setState("playing");
         if (pending.playKind === "wait") {
+          startSeamlessLoop(pending.src, pending.token);
           primeConfirmWhenSafe(id, pending.target, pending.token);
         }
         return true;
@@ -620,6 +622,92 @@ window.HF_VideoPlayer = (() => {
      * 不抓的代價很小：按「決定」時 `playOnce("confirm")` 本來就會等 canplay，
      * 而且那時畫面上有「鎖定中…」。**一次鎖定多等一下，好過每次瀏覽都卡一秒。**
      */
+    /* ── 無縫循環：兩顆 <video> 交棒 ──────────────────────────────────
+     *
+     * **為什麼非這樣不可**：等待片是 3 秒的循環片，而 **`seek` 一定會造成
+     * 重新緩衝** —— 就算整支都在本機 blob 裡也一樣。2026-09-08 在雲端把三種
+     * 循環寫法擺在一起量（同一支片、同一顆 blob、跑 13 秒）：
+     *
+     *     A) loop = true              4 次餓死  seeking→waiting ×4
+     *     B) ended → currentTime = 0  4 次餓死  ended→seeking→waiting ×4
+     *     C) 提早 0.15s 就 seek        4 次餓死  seeking→waiting ×4
+     *     D) 兩顆交棒                 **0 次**
+     *
+     * 三種寫法完全一樣，因為**兇手是 seek 本身，不是 `loop` 這個屬性**。
+     * 唯一的解法是讓看得見的那顆**從頭到尾不 seek**：快播完時把另一顆
+     * （早就停在 0、已經解好碼）接上來，seek 留給藏起來的那顆做。
+     *
+     * 這件事的重要性：它是**結構性的、每 3 秒重複一次**，只要睿哥盯著一個
+     * 角色就會一直發生 —— v1.80〜v1.94 十幾個版本都在修「第一次載入」，
+     * 修得再對也蓋不掉每 3 秒一次的頓。
+     *
+     * ⚠️ **不要用 `activateVideo()` 做交棒。** 它會呼叫 `opts.onShown`，
+     * 而 game.js 在那裡面會重啟角色 BGM —— 每 3 秒重啟一次音樂。
+     * 這裡只切 `is-active`（CSS 是 `opacity`/`visibility`、`transition: none`）
+     * 並同步 `video`／`standby`，不碰其他狀態。
+     */
+    const LOOP_LEAD_S = 0.25;      // 提前這麼久把夥伴叫起來
+    const LOOP_TICK_MS = 50;
+    let loopTimer = null;
+
+    function stopSeamlessLoop() {
+      if (!loopTimer) return;
+      clearInterval(loopTimer);
+      loopTimer = null;
+    }
+
+    /**
+     * 讓 `src` 這支等待片以「兩顆交棒」的方式無縫循環。
+     * 夥伴還沒解好碼的那一圈會自動退回 `loop = true`（就是舊行為，不會更糟）。
+     */
+    function startSeamlessLoop(src, token) {
+      stopSeamlessLoop();
+      if (destroyed || !video || videos.length < 2) return;
+      const partner = videos.find((v) => v !== video);
+      if (!partner) return;
+      /**
+       * ⚠️ **只有位元組已經在本機（blob）時才交棒。**
+       *
+       * 夥伴那顆要載同一支片；若沒有 blob，那就是**跟伺服器再抓一次整支**——
+       * 在睿哥約 130KB/s 的線上等於雙倍流量，為了修一個 12ms 的頓反而把
+       * 載入弄慢，完全不划算。沒有 blob 就維持原本的 `loop = true`
+       * （會有循環頓，但不會更糟），等預抓補上之後下一次選這個角色就順了。
+       */
+      if (!hasBlob(src)) return;
+      // 夥伴放同一支、停在開頭；先不播（`preload` 會把第一幀解好）
+      setSource(partner, src, { loop: false, preload: "auto" });
+      try { partner.pause(); } catch (_) {}
+
+      loopTimer = setInterval(() => {
+        if (destroyed || token !== playToken) return stopSeamlessLoop();
+        const live = video;
+        const idle = videos.find((v) => v !== live);
+        if (!live || !idle) return stopSeamlessLoop();
+        // 來源被換掉（選了別的角色／播確定片）就收手，交還控制權
+        if (live.dataset.src !== src || idle.dataset.src !== src) return stopSeamlessLoop();
+        if (!live.classList.contains("is-active")) return;
+        if (!live.duration || !isFinite(live.duration)) return;
+        if (live.currentTime < live.duration - LOOP_LEAD_S) return;
+
+        // 夥伴還沒準備好 → 這一圈退回原本的 loop，不要硬切出黑畫面
+        if (idle.readyState < 3) {
+          live.loop = true;
+          return;
+        }
+        live.loop = false;
+        try { idle.play()?.catch?.(() => {}); } catch (_) {}
+        idle.classList.add("is-active");
+        live.classList.remove("is-active");
+        video = idle;
+        standby = live;
+        // seek 發生在**藏起來**的那顆身上，看得見的那顆永遠不 seek
+        try {
+          live.pause();
+          live.currentTime = 0;
+        } catch (_) {}
+      }, LOOP_TICK_MS);
+    }
+
     function primeConfirmWhenSafe(id, target, token) {
       if (destroyed || !id || !target) return;
       const deadline = Date.now() + CONFIRM_PRIME_WAIT_MS;
@@ -635,7 +723,16 @@ window.HF_VideoPlayer = (() => {
         // 就是睿哥看到的那個頓。等畫面靜下來再說。
         setTimeout(() => {
           if (destroyed || token !== playToken || currentId !== id) return;
-          primeMedia(id, "confirm");
+          /**
+           * ⚠️ **用 `storeBlob()` 而不是 `primeMedia()`** —— 這是 v1.95 的關鍵。
+           *
+           * `primeMedia()` 會把 confirm 片掛到**待命的那顆 `<video>`** 上，
+           * 但無縫循環（`startSeamlessLoop()`）現在需要那顆來當交棒夥伴。
+           * 改成只把位元組抓成 Blob：**不佔用任何元素**，按「決定」時
+           * `setSource()` 走 `blobSrc()` 一樣是本機供應，預熱的好處完全保留。
+           */
+          const url = videoUrl(id, "confirm");
+          if (url) storeBlob(versioned(url));
         }, CONFIRM_PRIME_DELAY_MS);
       };
       tick();
@@ -772,6 +869,7 @@ window.HF_VideoPlayer = (() => {
       primedTarget = null;
       primedSrc = "";
       const token = ++playToken;
+      stopSeamlessLoop();   // 有新東西接手，交棒循環一律先收手
       pendingReveal = null;
       currentId = id;
       setBadge(playKind === "confirm" ? "鎖定中…" : "");
@@ -868,6 +966,7 @@ window.HF_VideoPlayer = (() => {
           resume?.catch?.(() => {});
         } catch (_) {}
         setState("playing");
+        startSeamlessLoop(src, token);
         primeConfirmWhenSafe(id, target, token);
       };
 
@@ -883,7 +982,10 @@ window.HF_VideoPlayer = (() => {
         activateVideo(target, token, id);
         setState("playing");
         reveal.done(true);
-        if (playKind === "wait") primeConfirmWhenSafe(id, target, token);
+        if (playKind === "wait") {
+          startSeamlessLoop(src, token);
+          primeConfirmWhenSafe(id, target, token);
+        }
       };
       if (!smoothWait) target.addEventListener("playing", showVideo, { once: true });
 
@@ -1002,6 +1104,7 @@ window.HF_VideoPlayer = (() => {
         primedTarget = null;
         primedSrc = "";
         const token = ++playToken;
+        stopSeamlessLoop();
         pendingReveal = null;
         currentId = id;
         let settled = false;
@@ -1124,6 +1227,7 @@ window.HF_VideoPlayer = (() => {
       primedTarget = null;
       primedSrc = "";
       playToken++;
+      stopSeamlessLoop();
       pendingReveal = null;
       currentId = null;
       visibleId = null;
@@ -1143,6 +1247,7 @@ window.HF_VideoPlayer = (() => {
 
     function stop() {
       if (destroyed) return;
+      stopSeamlessLoop();
       pause();
       videos.forEach((el) => {
         try {
