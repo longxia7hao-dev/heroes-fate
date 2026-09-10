@@ -319,6 +319,17 @@ JS 堆），再去看單次操作的耗時。診斷面板有 `音訊快取` 那�
 
 **加一個量測欄位時，先想清楚它在什麼情況下會給出假數字。**
 
+### ⑱ 揭露與交接不能把「準備中」當成「已完成」（v1.100）
+
+- `revealPrepared` 前已在隱藏層暫停／歸零，揭露時不要再設 `currentTime=0`；同值賦值也會觸發非同步 seeking。本機 WebKit 的 19 次換角由 19 次可見 seek 降到 0。
+- 冷載入先用頭像翻開時，影片接手前也要在隱藏層等倒帶／播放就緒；超時保留頭像，不硬露出停住的影片。
+- 循環夥伴 `readyState>=3` 不代表 `play()` 成功。等 playing／Promise 成功才切 is-active；延遲、拒播、無回應時舊片繼續 loop，切角須取消在途交接並檢查來源／token。
+- `onShown` 是翻牌中點，不是翻牌完成；角色 BGM 的解碼也要等完整翻牌後再開始，過期角色排程要取消。
+- 預抓「不中止」與「單工」要一起做：重啟排程前等前一個 controller 釋放，否則換頁 800ms 後可能重抓還沒完成的同一支。
+- 音效自然 ended、主動 stop、啟動失敗都要 disconnect source／gain；不能只清 BGM 淡出那條路徑。回歸測試須模擬 stop 不送 ended，並驗證延遲 ended 不會誤清新群組。
+
+測試：`node tools/test_audio_cleanup.cjs`；`HF_PLAYWRIGHT=<已安裝 Playwright 的絕對路徑> node tools/test_pick_runtime.cjs`。後者使用 WebKit 真實 H.264、預設連 8888，靜音但不略過音訊解碼；`HF_TEST_URL=http://127.0.0.1:8901/ HF_COLD=1` 可搭配 `tools/slow_server.py --port 8901 --kbps 130`，`HF_RAID=1` 另跑完整魔王討伐。這不是實體 iPhone／Tesla 的掉格保證。
+
 ## 雲端 session 測不到的四件事
 
 **別把「Chromium 上沒問題」當成沒問題。** 這四項每一項都造成過誤判：
@@ -352,10 +363,7 @@ python3 tools/slow_server.py --port 8901 --kbps 130 --webm-dir <dir>   # 測試�
 
 ## 還沒解決的
 
-- **選角待機片的卡頓：v1.92 應該已經解決，等睿哥實機確認。** 預抓不再被自己
-  `abort()`（地雷區 ⑤），他的 `?debug=1` 截圖顯示 8〜59ms 全走 `blob`；
-  另補上 `play()` 掛住的保險（地雷區 ⑩）。若還有「卡片不翻面」，
-  **一定要帶 `?debug=1` 截圖**，看 A／B 標記的事件序列。
+- **v1.100 已修正可重現的揭露倒帶、循環搶先交接、BGM 翻牌衝突與資源清理，暖／冷載入回歸通過；仍待睿哥實體 iPhone／Tesla 驗收。** 若仍卡頓，帶 `?debug=1` 截圖或錄影，區分「載入等待」與「播放中掉格」，看 A／B 事件與畫格間隔，不再以桌面結果宣稱實機已解決。
 - **要查手機上的影片問題，先開 `?debug=1`**（`js/debugHud.js`，平常完全不啟動）。
   它把 `<video>` 的來源（blob／net）、readyState、緩衝段數、`waiting`／`stalled`、
   真正的 STALL 與實測網速畫在畫面上。**沒有它就只能靠螢幕錄影反推，v1.80〜v1.88

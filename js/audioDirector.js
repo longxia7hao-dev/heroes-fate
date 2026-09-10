@@ -202,6 +202,7 @@ window.HF_Audio = (() => {
     }
   }
   const activeGroups = new Map();
+  const sourceCleanups = new WeakMap();
   const cooldowns = new Map();
   let corePreloadPromise = null;
   let corePreloadDone = false;
@@ -373,21 +374,33 @@ window.HF_Audio = (() => {
     return bufferCache.get(url);
   }
 
-  function registerSource(source, group) {
-    if (!group) return;
-    let set = activeGroups.get(group);
-    if (!set) activeGroups.set(group, (set = new Set()));
-    set.add(source);
+  function registerSource(source, gain, group) {
+    let set = null;
+    if (group) {
+      set = activeGroups.get(group);
+      if (!set) activeGroups.set(group, (set = new Set()));
+      set.add(source);
+    }
+    let cleaned = false;
     const cleanup = () => {
-      set.delete(source);
-      if (!set.size) activeGroups.delete(group);
+      if (cleaned) return;
+      cleaned = true;
+      sourceCleanups.delete(source);
+      if (set) {
+        set.delete(source);
+        if (!set.size && activeGroups.get(group) === set) activeGroups.delete(group);
+      }
+      try { source.disconnect(); } catch (_) {}
+      try { gain?.disconnect(); } catch (_) {}
       notifyState();
     };
+    sourceCleanups.set(source, cleanup);
     if (typeof source.addEventListener === "function") {
       source.addEventListener("ended", cleanup, { once: true });
     } else {
       source.onended = cleanup;
     }
+    return cleanup;
   }
 
   async function playUrl(url, options = {}) {
@@ -399,17 +412,18 @@ window.HF_Audio = (() => {
     if (!buffer || !settings.enabled) return null;
     const source = ctx.createBufferSource();
     const gain = ctx.createGain();
-    source.buffer = buffer;
-    source.playbackRate.value = clamp(options.rate, 0.45, 2.2, 1);
-    gain.gain.value = clamp(options.volume, 0, 1.5, 1);
-    source.connect(gain);
-    gain.connect(sfxBus);
-    registerSource(source, options.group || "presentation");
+    const cleanup = registerSource(source, gain, options.group || "presentation");
     try {
+      source.buffer = buffer;
+      source.playbackRate.value = clamp(options.rate, 0.45, 2.2, 1);
+      gain.gain.value = clamp(options.volume, 0, 1.5, 1);
+      source.connect(gain);
+      gain.connect(sfxBus);
       source.start(0);
       lastError = null;
       notifyState();
     } catch (error) {
+      cleanup();
       rememberError(error);
       return null;
     }
@@ -449,6 +463,9 @@ window.HF_Audio = (() => {
     if (!set) return;
     [...set].forEach((source) => {
       try { source.stop(); } catch (_) {}
+      // Safari 不保證 stop() 後立刻送 ended；主動清理並靠 cleanup 的
+      // idempotent guard 吃掉稍後抵達的 ended，避免節點滯留。
+      sourceCleanups.get(source)?.();
     });
     activeGroups.delete(group);
   }
@@ -457,11 +474,19 @@ window.HF_Audio = (() => {
     [...activeGroups.keys()].forEach(stopGroup);
   }
 
+  function cleanupMusicVoice(voice, stop = true) {
+    if (!voice || voice.cleaned) return;
+    voice.cleaned = true;
+    if (stop) {
+      try { voice.source.stop(); } catch (_) {}
+    }
+    try { voice.source.disconnect(); } catch (_) {}
+    try { voice.gain.disconnect(); } catch (_) {}
+  }
+
   function stopMusic() {
     musicRequest++;
-    if (currentVoice) {
-      try { currentVoice.source.stop(); } catch (_) {}
-    }
+    cleanupMusicVoice(currentVoice);
     currentVoice = null;
     currentMusic = null;
     notifyState();
@@ -501,14 +526,16 @@ window.HF_Audio = (() => {
     gain.connect(musicBus);
 
     const outgoing = currentVoice;
+    const incoming = { source, gain, key, cleaned: false };
     try {
       source.start(0);
     } catch (error) {
+      cleanupMusicVoice(incoming);
       rememberError(error);
       return;
     }
 
-    currentVoice = { source, gain, key };
+    currentVoice = incoming;
     currentMusic = key;
     lastError = null;
     notifyState();
@@ -521,7 +548,6 @@ window.HF_Audio = (() => {
       outgoing.gain.gain.setValueAtTime(heldGain, now);
       outgoing.gain.gain.linearRampToValueAtTime(0.0001, now + fadeSeconds);
       setTimeout(() => {
-        try { outgoing.source.stop(); } catch (_) {}
         /**
          * ⚠️ **一定要 `disconnect()`，只 `stop()` 不夠。**
          *
@@ -531,8 +557,7 @@ window.HF_Audio = (() => {
          * 睿哥 2026-09-08：「第一次點都不會，後就開始卡了」——
          * 會**隨著點擊次數累積**的東西就這一類，所以先清掉。
          */
-        try { outgoing.source.disconnect(); } catch (_) {}
-        try { outgoing.gain.disconnect(); } catch (_) {}
+        cleanupMusicVoice(outgoing);
       }, fadeSeconds * 1000 + 120);
     }
   }

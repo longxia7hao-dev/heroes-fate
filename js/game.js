@@ -341,6 +341,33 @@
   let pickFlipping = false;
   let pickFlipWait = null;
   let pickFlipQueued = null;
+  let pickMusicTimer = null;
+  let pickMusicTicket = 0;
+
+  function cancelPickMusic() {
+    pickMusicTicket++;
+    clearTimeout(pickMusicTimer);
+    pickMusicTimer = null;
+  }
+
+  function schedulePickMusic(heroId) {
+    cancelPickMusic();
+    const ticket = pickMusicTicket;
+    const gen = previewGen;
+    // onShown 在翻牌 90° 中點觸發，不是動畫結束。角色曲重新解碼
+    // 會與後半段翻牌搶資源；等整張牌落定再做，連點只保留最後一位。
+    Promise.resolve(pickFlipWait).then(() => {
+      if (ticket !== pickMusicTicket || gen !== previewGen) return;
+      pickMusicTimer = setTimeout(() => {
+        pickMusicTimer = null;
+        const activeId = state.selectedHeroId || state.players[state.pickIndex]?.heroId;
+        if (ticket !== pickMusicTicket || gen !== previewGen || pickBusy ||
+            document.body.dataset.screen !== "pick" || activeId !== heroId ||
+            pickVideo?.visibleId !== heroId) return;
+        window.HF_Audio?.playHeroMusic?.(heroId);
+      }, 100);
+    });
+  }
 
   function waitMs(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -435,6 +462,7 @@
 
   function stopPickPreview() {
     previewGen++;
+    cancelPickMusic();
     if (!pickVideo) return;
     try {
       pickVideo.stop?.();
@@ -568,6 +596,12 @@
     clearTimeout(pickWarmTimer);
     pickWarmTimer = null;
     if (!WARM_OK_SCREENS.has(document.body.dataset.screen)) return;
+    // 換頁／換角會重排這個計時器，但上一支下載刻意不中止。
+    // 等它釋放連線再開下一輪，否則 800ms 後可能重抓同一支、互搶 4G。
+    if (pickWarmCtrl) {
+      pickWarmTimer = setTimeout(startPickWarm, 400);
+      return;
+    }
     const token = ++pickWarmToken;
     (async () => {
       const vp = window.HF_VideoPlayer;
@@ -595,18 +629,24 @@
           pickWarmTimer = setTimeout(startPickWarm, 400);
           return;
         }
-        pickWarmCtrl = new AbortController();
+        const controller = new AbortController();
+        pickWarmCtrl = controller;
         // ⚠️ **要存成 Blob，不能只是 `fetch()` 讓它進 HTTP 快取。**
         // 2026-09-07 實測：預抓進 HTTP 快取之後，`<video>` 播同一支**還是會
         // 重新跟伺服器要**（fetch 預抓、`<video preload>` 預熱都一樣）——
         // v1.80〜v1.86 的預抓因此完全沒有效果，只是在搶頻寬。
         // 存成 Blob 之後 `setSource()` 會餵 `blob:` URL，網路才真的不在路徑上。
-        if (await vp.storeBlob(vp.versioned(m.wait), pickWarmCtrl.signal)) {
+        let stored = false;
+        try {
+          stored = await vp.storeBlob(vp.versioned(m.wait), controller.signal);
+        } finally {
+          if (pickWarmCtrl === controller) pickWarmCtrl = null;
+        }
+        if (stored) {
           pickWarmDone.add(id);
         } else if (token !== pickWarmToken) {
           return;                                // 是被中止的，交給計時器重啟
         }
-        pickWarmCtrl = null;
       }
     })();
   }
@@ -800,10 +840,8 @@
         pedestal?.classList.add("is-flipped");
         revealPickVideoIfReady();
         const activeId = state.selectedHeroId || state.players[state.pickIndex]?.heroId;
-        // 先把玩家正在等的 Sora 首幀揭開，再啟動該角色 BGM，避免兩個
-        // 145KB/數百 KB 請求在冷 4G 上搶同一個開場時機。
         if (shownId && shownId === activeId) {
-          window.HF_Audio?.playHeroMusic?.(shownId);
+          schedulePickMusic(shownId);
         }
       },
       onHide: () => {
@@ -815,6 +853,7 @@
 
   async function updateModelPreview() {
     const gen = ++previewGen;
+    cancelPickMusic();
     ensurePlayers();
     const p = state.players[state.pickIndex] || { heroId: null, hero: null };
     // 沒有點選、也沒有已鎖定的角色 → 舞台留空（不預設帶入任何角色）
@@ -858,7 +897,10 @@
 
     const vp = ensurePickVideo();
     if (vp && gen === previewGen) {
-      if (vp.visibleId === h.id && $("#sprite-stage")?.classList.contains("is-live")) return;
+      if (vp.visibleId === h.id && $("#sprite-stage")?.classList.contains("is-live")) {
+        schedulePickMusic(h.id);
+        return;
+      }
       pedestal?.classList.remove("is-empty");
       pedestal?.classList.add("is-flipped");
       try {

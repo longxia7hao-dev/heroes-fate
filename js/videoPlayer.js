@@ -509,9 +509,8 @@ window.HF_VideoPlayer = (() => {
           pending.target.readyState < 2
         ) return false;
         pendingReveal = null;
-        // 準備期間影片可在不可見層先觸發 playing；真正揭露時歸零，確保
-        // 翻回正面看到的是完整待選動畫開頭，而不是已偷跑數百毫秒。
-        try { pending.target.currentTime = 0; } catch (_) {}
+        // queueVideoReveal 已在隱藏層暫停並歸零；此時再 seek，即使設成
+        // 同一個 0，也會讓 Safari 在翻牌中點重新解碼、可見畫面停頓。
         if (!activateVideo(pending.target, pending.token, pending.id)) return false;
         try {
           const resume = pending.target.play();
@@ -693,11 +692,16 @@ window.HF_VideoPlayer = (() => {
      */
     const LOOP_PARTNER_DELAY_MS = 1200;
     let loopTimer = null;
+    let loopPartnerTimer = null;
+    let cancelLoopHandoff = null;
 
     function stopSeamlessLoop() {
-      if (!loopTimer) return;
       clearInterval(loopTimer);
       loopTimer = null;
+      clearTimeout(loopPartnerTimer);
+      loopPartnerTimer = null;
+      cancelLoopHandoff?.();
+      cancelLoopHandoff = null;
     }
 
     /**
@@ -721,7 +725,8 @@ window.HF_VideoPlayer = (() => {
 
       // 夥伴的載入＋解碼**不能壓在翻牌那一刻**（見 LOOP_PARTNER_DELAY_MS）。
       // 它要到第 3 秒才用得到，等演出結束、畫面靜下來再準備。
-      setTimeout(() => {
+      loopPartnerTimer = setTimeout(() => {
+        loopPartnerTimer = null;
         if (destroyed || token !== playToken) return;
         const p2 = videos.find((v) => v !== video);
         if (!p2) return;
@@ -729,6 +734,7 @@ window.HF_VideoPlayer = (() => {
         try { p2.pause(); } catch (_) {}
       }, LOOP_PARTNER_DELAY_MS);
 
+      let retryAfter = 0;
       loopTimer = setInterval(() => {
         if (destroyed || token !== playToken) return stopSeamlessLoop();
         const live = video;
@@ -745,6 +751,7 @@ window.HF_VideoPlayer = (() => {
          * 實測就是 `交棒次數 0`、循環頓整個回來。**跳過就好，不要收手。**
          */
         if (idle.dataset.src !== src) return;
+        if (cancelLoopHandoff || Date.now() < retryAfter) return;
         if (!live.classList.contains("is-active")) return;
         if (!live.duration || !isFinite(live.duration)) return;
         if (live.currentTime < live.duration - LOOP_LEAD_S) return;
@@ -754,17 +761,44 @@ window.HF_VideoPlayer = (() => {
           live.loop = true;
           return;
         }
-        live.loop = false;
-        try { idle.play()?.catch?.(() => {}); } catch (_) {}
-        idle.classList.add("is-active");
-        live.classList.remove("is-active");
-        video = idle;
-        standby = live;
-        // seek 發生在**藏起來**的那顆身上，看得見的那顆永遠不 seek
+        // readyState 只表示已解碼，不代表 play() 已成功。Safari 可能延遲、
+        // 拒絕或永不完成；下一顆真的播放前，舊畫面要繼續 loop，不能先藏掉。
+        live.loop = true;
+        let settled = false;
+        let timeout;
+        const finish = (ok) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          idle.removeEventListener("playing", onPlaying);
+          if (cancelLoopHandoff === cancel) cancelLoopHandoff = null;
+          const current = !destroyed && token === playToken && video === live &&
+            live.dataset.src === src && idle.dataset.src === src;
+          if (!ok || !current || idle.paused || idle.seeking || idle.readyState < 2) {
+            retryAfter = Date.now() + 1000;
+            // 新選角可能已重用這顆，過期 callback 絕不能暫停新角色。
+            if (idle !== video && idle.dataset.src === src) {
+              try { idle.pause(); } catch (_) {}
+            }
+            return;
+          }
+          idle.loop = true;
+          idle.classList.add("is-active");
+          live.classList.remove("is-active");
+          video = idle;
+          standby = live;
+          // seek 只留給已藏起來的舊影片；不觸發 onShown／不重啟 BGM。
+          try { live.pause(); live.currentTime = 0; } catch (_) {}
+        };
+        const onPlaying = () => finish(true);
+        const cancel = () => finish(false);
+        cancelLoopHandoff = cancel;
+        idle.addEventListener("playing", onPlaying);
+        timeout = setTimeout(cancel, PLAY_SETTLE_MS);
         try {
-          live.pause();
-          live.currentTime = 0;
-        } catch (_) {}
+          const playing = idle.play();
+          playing?.then?.(() => finish(true), cancel);
+        } catch (_) { cancel(); }
       }, LOOP_TICK_MS);
     }
 
@@ -977,9 +1011,9 @@ window.HF_VideoPlayer = (() => {
         showStill(id);
         return reveal.done(true);
       }
-      if (target.dataset.src !== src) {
-        setSource(target, src, { loop: playKind === "wait", preload: "auto" });
-      }
+      // 同網址但 readyState=0 可能是 iOS 回收了解碼資源；也要走 setSource
+      // 的恢復路徑，不能在呼叫端先略過它。
+      setSource(target, src, { loop: playKind === "wait", preload: "auto" });
       target.loop = playKind === "wait";
 
       try {
@@ -1010,7 +1044,7 @@ window.HF_VideoPlayer = (() => {
        *   - 揭露點還沒到 → 把待揭露內容從靜圖換成影片，翻牌中點一次揭露，不閃兩段
        *   - 揭露點已過去 → 直接 activateVideo 換掉靜圖
        */
-      const takeOverWithVideo = () => {
+      const takeOverWithVideo = async () => {
         if (tookOver || destroyed || token !== playToken) return;
         if (!target || target.dataset.src !== src || target.readyState < 2) return;
         tookOver = true;
@@ -1019,12 +1053,16 @@ window.HF_VideoPlayer = (() => {
           queueVideoReveal();
           return;
         }
-        try { target.currentTime = 0; } catch (_) {}
+        // 冷載入已用頭像翻開：把倒帶／首幀解碼留在隱藏層，完成才接手。
+        // 不能 seek 後立即 activate，seeked 是非同步，否則又把停頓露出來。
+        try { if (target.currentTime > 0) target.currentTime = 0; } catch (_) {}
+        if (target.seeking) await waitEvent(target, "seeked", PLAY_SETTLE_MS);
+        if (destroyed || token !== playToken || target.dataset.src !== src ||
+            target.seeking || target.readyState < 2) return;
+        let playing = false;
+        try { playing = await tryPlay(target); } catch (_) {}
+        if (!playing || destroyed || token !== playToken || target.dataset.src !== src) return;
         if (!activateVideo(target, token, id)) return;
-        try {
-          const resume = target.play();
-          resume?.catch?.(() => {});
-        } catch (_) {}
         setState("playing");
         startSeamlessLoop(src, token);
         primeConfirmWhenSafe(id, target, token);
@@ -1057,13 +1095,13 @@ window.HF_VideoPlayer = (() => {
       const tryPlay = async (el) => {
         const p = el.play();
         if (!p || typeof p.then !== "function") return true;
-        let settled = false;
-        p.then(() => { settled = true; }, () => { settled = true; });
+        let succeeded = false;
+        p.then(() => { succeeded = true; }, () => {});
         await Promise.race([
           p.catch(() => {}),
           new Promise((r) => setTimeout(r, PLAY_SETTLE_MS)),
         ]);
-        return settled;
+        return succeeded;
       };
 
       try {
