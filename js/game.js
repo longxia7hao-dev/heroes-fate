@@ -1371,20 +1371,36 @@
     attackPrefetchPool.delete(url);
   }
 
+  /**
+   * 播放用的網址：**有本機 blob 就吃 blob**，沒有才回網路網址。
+   *
+   * ⚠️ 這兩件事一定要成對：`storeBlob()` 把位元組留著、`resolveSrc()` 在播放時
+   * 換過來。少了後者，預抓完全白做 —— 地雷區 ④／⑳ 記過：
+   * 隱藏 `<video preload="auto">` 的預熱**不會被真正播放的元素重用**。
+   */
+  function mediaSrc(url) {
+    const vp = window.HF_VideoPlayer;
+    const wanted = vp?.versioned ? vp.versioned(url) : url;
+    return vp?.resolveSrc ? vp.resolveSrc(wanted) : wanted;
+  }
+
+  /** 預抓成 Blob（取代舊的隱藏 `<video preload>`，那個是無效的）。 */
+  function warmMediaBlob(url) {
+    const vp = window.HF_VideoPlayer;
+    if (!url || !vp?.storeBlob || !vp?.versioned) return;
+    try { vp.storeBlob(vp.versioned(url)); } catch (_) {}
+  }
+
   function warmAttackClip(url) {
     if (!url || MEDIA_POLICY.constrainedNetwork || attackPrefetchPool.has(url)) return;
     // 下一支改變時，立即中止上一個背景下載；不讓晚到請求重新塞回 pool。
     attackPrefetchPool.forEach((el) => releaseMediaElement(el));
     attackPrefetchPool.clear();
-    const el = document.createElement("video");
-    el.preload = "auto";
-    el.muted = true;
-    el.playsInline = true;
-    el.src = window.HF_VideoPlayer?.versioned
-      ? window.HF_VideoPlayer.versioned(url)
-      : url;
-    attackPrefetchPool.set(url, el);
-    try { el.load(); } catch (_) {}
+    // ⚠️ 舊版在這裡建一顆隱藏 `<video preload="auto">` —— **那種預熱無效**
+    // （v1.88 實測：真正播放的元素照樣跟伺服器重抓），只是白佔一個解碼器。
+    // v1.103 攻擊片碼率拉高 42% 之後更不能這樣浪費，改存 Blob。
+    attackPrefetchPool.set(url, null);
+    warmMediaBlob(url);
   }
 
   function prefetchAttackClips(map) {
@@ -1420,13 +1436,9 @@
       const url = window.HF_VideoPlayer?.videoUrl?.(heroId, "final", bossId);
       if (!url) return;
       releaseMediaElement(finalPrefetch);
-      const el = document.createElement("video");
-      el.preload = "auto";
-      el.muted = true;
-      el.playsInline = true;
-      el.src = window.HF_VideoPlayer.versioned(url);
-      try { el.load(); } catch (_) {}
-      finalPrefetch = el;
+      finalPrefetch = null;
+      // 同 warmAttackClip：隱藏 `<video preload>` 的預熱無效，改存 Blob
+      warmMediaBlob(url);
     } catch (_) {}
   }
 
@@ -1507,9 +1519,7 @@
        * `resolveSrc()` 把網址換成本機已握著的 `blob:`（沒有就原樣回傳），
        * 跟選角待機片走同一套已驗證的機制。
        */
-      const vpForSrc = window.HF_VideoPlayer;
-      const wantedSrc = vpForSrc?.versioned ? vpForSrc.versioned(url) : url;
-      video.src = vpForSrc?.resolveSrc ? vpForSrc.resolveSrc(wantedSrc) : wantedSrc;
+      video.src = mediaSrc(url);
       video.preload = "auto";
       video.loop = false;
       video.muted = true;
@@ -1615,9 +1625,8 @@
       video.playsInline = true;
       video.setAttribute("playsinline", "");
       video.setAttribute("webkit-playsinline", "");
-      video.src = window.HF_VideoPlayer?.versioned
-        ? window.HF_VideoPlayer.versioned(url)
-        : url;
+      // 吃得到預抓的 blob 就用本機的（見 mediaSrc）
+      video.src = mediaSrc(url);
       try { video.load(); } catch (_) {}
       /**
        * iOS／LINE 內建瀏覽器：不先 play()，canplay 永遠不來，8 秒後整段被當成
@@ -1742,9 +1751,8 @@
         warmAttackClip(source);
         video.pause();
         video.poster = artUrl(`assets/videos/poster/attack/${h.id}.jpg`);
-        video.src = window.HF_VideoPlayer?.versioned
-          ? window.HF_VideoPlayer.versioned(source)
-          : source;
+        // 吃得到預抓的 blob 就用本機的（見 mediaSrc）
+        video.src = mediaSrc(source);
         video.preload = "auto";
         video.loop = false;
         video.muted = true;
@@ -1846,6 +1854,23 @@
     prefetchStageIntro(result.mode);
     const battleMode = result.mode === "boss" || result.mode === "doom";
     const winnerId = result.winner?.heroId || result.survivor?.heroId || null;
+    /**
+     * **勝者的 final 片也在這裡就開始存 Blob。**
+     *
+     * final 是 1928KB，在睿哥約 130KB/s 的線上要 14.8 秒。舊版要等攻擊段
+     * 才啟動預抓（`finalWarmStarted`），實測到了第 25 秒上場時**仍是走網路**、
+     * 整段多等約 2 秒。從這裡開始抓的話，到真正要播中間有降臨＋攻擊＋
+     * 命運一擊約 20 秒，剛好來得及。
+     *
+     * ⚠️ 公平性不受影響：`seedRun()` 已經把結果完整定案了，**媒體下載只服務
+     * 演出、不參與 RNG**（舊版本來就在揭曉之前預抓勝者的 final，只是更晚）。
+     */
+    if (battleMode && winnerId) {
+      window.HF_VideoPlayer?.loadManifest?.().then(() => {
+        const url = window.HF_VideoPlayer?.videoUrl?.(winnerId, "final", "demon");
+        if (url) warmMediaBlob(url);
+      }).catch(() => {});
+    }
     window.HF_Audio?.preloadHeroes?.(
       payloadPlayers.map((player) => player.heroId),
       {
