@@ -387,8 +387,29 @@ v1.102 想把分隊開場拉回高畫質，git 裡最大的版本是 1540KB —�
 
 **要真的更清楚只有一條路：用原始素材重編成 1080 寬。**
 原始檔只在睿哥的 Mac／Google Drive（repo 只有 `mobile/` 與 `poster/`），
-**雲端 session 做不到，這件事要在 Mac 上做**（`tools/replace_hero_videos.py`
-那類工具讀得到 Drive）。重壓已經壓過的檔案**不會**還原畫質。
+**雲端 session 做不到，這件事要在 Mac 上做。** 重壓已經壓過的檔案
+**不會**還原畫質 —— `tools/recompress_videos.py` 只會把它壓更小。
+
+工具（v1.104 新增，**在 Mac 上跑**）：
+
+    python3 tools/upgrade_from_source.py --src <原片> --dest boss/arrival
+    python3 tools/upgrade_from_source.py --src <資料夾> --kind final --dry-run
+
+1080 寬／CRF 21／high profile／faststart，自動重製 poster 並跑
+`gen_asset_versions.py`＋`sync_build.py`。**來源比目標窄會自動不放大。**
+
+### ㉓ 還原舊素材：一定要逐版量「解析度」
+
+`teams/intro` 的歷史版本看起來一個比一個大，實際上是**不同的影片**：
+
+    8a2108f  720x1280   537KB   ← 現行（重壓過）
+    bcd858c  720x1280   547KB   ← 同一支的最佳版
+    e1c0fa7  800x450    554KB   ← 橫式，不同影片
+    e87e53c  544x966    636KB   ← 不同影片
+    584ec61  640x1136  1540KB   ← 不同影片（最大，但完全不能用）
+
+**只看檔案大小會挑到最糟的那一個。** 逐版 `ffmpeg -i` 量解析度，
+再用首幀平均像素差確認（同一支重壓過的約 2 以下）。
 
 ## 雲端 session 測不到的四件事
 

@@ -45,7 +45,7 @@ window.HF_ASSET_V = {
 "assets/videos/mobile/final/princess.mp4":"00dc8fc4f4",
 "assets/videos/mobile/final/ranger.mp4":"b27e62035e",
 "assets/videos/mobile/order/intro.mp4":"2a1c8359e0",
-"assets/videos/mobile/teams/intro.mp4":"9cfdd771aa",
+"assets/videos/mobile/teams/intro.mp4":"786110779a",
 "assets/videos/mobile/victory/amazon.mp4":"ce7a938151",
 "assets/videos/mobile/victory/archmage.mp4":"25b6aa4f33",
 "assets/videos/mobile/victory/assassin.mp4":"b924024ac6",
