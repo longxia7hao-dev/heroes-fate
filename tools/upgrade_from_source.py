@@ -16,9 +16,13 @@
 
 ## 怎麼用
 
-    # 單支
+    # 單支（魔王降臨：1080 寬）
     python3 tools/upgrade_from_source.py --src ~/Downloads/arrival_原片.mp4 \
                                          --dest boss/arrival
+
+    # 最後一擊：**用 900 寬**。1080 寬任何 CRF 都是現行的 2.4 倍以上，
+    # 4G 上在戰鬥的 17〜25 秒前置時間內抓不完（見 CRF 常數旁的實測數字）
+    python3 tools/upgrade_from_source.py --src <資料夾> --kind final --width 900
 
     # 整個資料夾（檔名要跟目標一致，例如 paladin.mp4 → final/paladin）
     python3 tools/upgrade_from_source.py --src ~/Drive/最後一擊 --kind final
@@ -34,6 +38,7 @@
 
 - `-map 0:v:0`：Sora 原片常夾一軌 mjpeg 封面圖，不指定的話 ffmpeg 可能挑錯軌
   （v1.55 被咬過）。
+- `-an`：不帶音軌。舞台片全部靜音播放，音效另在 `assets/audio/`；現行 70 支都沒音軌。
 - `-profile:v high`：1080 寬用 high profile 比 main 省，iOS 完全支援。
 - `+faststart`：moov 放前面，邊下載邊播才不會等整支。
 - **不放大**：來源若小於目標寬度就維持原寬。把 720 的素材拉成 1080 只會更糊更大。
@@ -53,7 +58,13 @@ POSTER = ROOT / "assets" / "videos" / "poster"
 POSTER_KINDS = {"attack", "final", "victory", "boss", "order", "teams"}
 POSTER_WIDTH = 400
 TARGET_WIDTH = 1080
-CRF = "21"          # 1080 寬的視覺無損區間；720 用 29〜32 是因為要遷就 4G
+# ⚠️ 2026-09-11 在真實 Sora 原片上量過，CRF 21 是陷阱：
+#   final 1080 寬 CRF 21 → 16〜25MB／支（13〜20 Mb/s），130KB/s 的 4G 要 170 秒，
+#   逾時後 final 根本不會播（等於把 v1.7 的「最後一擊消失」種回去）。
+#   paladin final 的階梯：1080/CRF26 11.0MB、CRF28 8.2MB、CRF30 6.1MB、CRF32 4.6MB；
+#   900/CRF32 3.4MB；現行 720 是 1.9MB。魔王降臨 1080/CRF32 只有 1.8MB（現行 1.4MB）。
+#   睿哥 2026-09-11 拍板：final 用 900 寬 CRF 32、魔王降臨 1080 寬 CRF 32。
+CRF = "32"
 
 
 def ff() -> str:
@@ -83,11 +94,14 @@ def encode(src: pathlib.Path, dst: pathlib.Path, width: int, crf: str) -> None:
     tmp = dst.with_suffix(".tmp.mp4")
     cmd = [
         ff(), "-y", "-i", str(src),
-        "-map", "0:v:0", "-map", "0:a:0?",
+        "-map", "0:v:0",
+        # 舞台／切入影片一律靜音播放（iOS 自動播放的硬性條件），角色音效與
+        # BGM 另外放在 assets/audio/ —— 所以現行 70 支全部無音軌。原片的 AAC
+        # 留著只是每支多 80KB 給 4G 扛，而且 <video muted> 也不會播它。
+        "-an",
         "-c:v", "libx264", "-crf", crf, "-preset", "slow",
         "-profile:v", "high", "-pix_fmt", "yuv420p",
         "-vf", f"scale={target}:-2",
-        "-c:a", "aac", "-b:a", "64k", "-ac", "2",
         "-movflags", "+faststart",
         str(tmp),
     ]

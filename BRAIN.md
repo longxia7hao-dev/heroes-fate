@@ -395,8 +395,26 @@ v1.102 想把分隊開場拉回高畫質，git 裡最大的版本是 1540KB —�
     python3 tools/upgrade_from_source.py --src <原片> --dest boss/arrival
     python3 tools/upgrade_from_source.py --src <資料夾> --kind final --dry-run
 
-1080 寬／CRF 21／high profile／faststart，自動重製 poster 並跑
-`gen_asset_versions.py`＋`sync_build.py`。**來源比目標窄會自動不放大。**
+high profile／faststart，自動重製 poster 並跑 `gen_asset_versions.py`＋
+`sync_build.py`。**來源比目標窄會自動不放大。**
+
+**⚠️ CRF 21 是陷阱，工具預設已改成 32（2026-09-11 在真實原片上量的）**：
+final 1080 寬 CRF 21 → **16〜25MB／支**，130KB/s 的 4G 要 170 秒，逾時後
+final 根本不會播。paladin 的階梯：1080/CRF26 11.0MB、28 8.2MB、30 6.1MB、
+**32 4.6MB**；**900/32 3.4MB**；現行 720 是 1.9MB。**final 只有戰鬥開始後
+17〜25 秒的前置時間還要跟攻擊片搶頻寬，1080 寬任何 CRF 都抓不完** ——
+睿哥拍板 **final 用 900 寬、魔王降臨用 1080 寬**（它在選角階段就預抓，1.8MB 夠）。
+
+**能升的只有原片本身夠寬的**：14 支 final 原片只有 5 支是 1152 寬
+（assassin／paladin／dark_fighter／amazon／orc_archer）；其餘 9 支原片就是
+720〜768，重做只會變大不會變清楚，其中 3 支 `copy_*.mov` 還帶 CapCut 浮水印
+（現行版本是裁掉的），重做會把浮水印帶回來 —— **不要碰**。
+
+**抽牌（`order/intro`）與卡片分組（`teams/intro`）的原片不在 Google Drive**：
+整個雲端硬碟、另一個帳號的掛載、下載夾、對話附件暫存區都沒有任何 6 秒的
+影片在 `角色圖/` 之外。筆記記的 `order/intro` 原片是 1152×1728／18MB、
+`teams/intro` 是睿哥補的 720×1280 直式版（那支本來就升不了）。要做這兩支，
+先請睿哥把原片放進 `角色圖/` 底下一個新資料夾。
 
 ### ㉓ 還原舊素材：一定要逐版量「解析度」
 
