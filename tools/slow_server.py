@@ -41,12 +41,17 @@ class Handler(BaseHTTPRequestHandler):
         target = (ROOT / path.lstrip("/")).resolve()
         if not str(target).startswith(str(ROOT)):
             return None
-        # wait 片改用 WebM 替身（Chromium 解不了 H.264）
-        if CFG["webm"] and re.search(r"/wait/([a-z_]+)\.mp4$", path):
-            stem = re.search(r"/wait/([a-z_]+)\.mp4$", path).group(1)
-            alt = pathlib.Path(CFG["webm"]) / f"{stem}.webm"
-            if alt.is_file():
-                return alt
+        # 影片改用 WebM 替身（Chromium 解不了 H.264）。
+        # 支援 wait/<id>.mp4 與開場片 boss|order|teams/<name>.mp4 ——
+        # 後者是驗魔王降臨／模式開場那段演出用的（v1.102 起）。
+        if CFG["webm"]:
+            m = re.search(r"/(wait|boss|order|teams)/([a-z_]+)\.mp4$", path)
+            if m:
+                kind, stem = m.group(1), m.group(2)
+                base = pathlib.Path(CFG["webm"])
+                alt = base / f"{stem}.webm" if kind == "wait" else base / kind / f"{stem}.webm"
+                if alt.is_file():
+                    return alt
         return target if target.is_file() else None
 
     def do_GET(self, head=False):

@@ -254,7 +254,9 @@
       if (previous !== "result") audioCue("result.settle", { group: "ui" });
     }
     if (name === "count") warmPickAssets();
-    if (name === "mode") prefetchArrivalClip();
+    // 進模式頁就先抓魔王降臨（最常玩的模式）；真正定案後 `prefetchStageIntro(result.mode)`
+    // 會再抓對的那一支，`storeBlob` 本身有去重，不會重複下載。
+    if (name === "mode") prefetchStageIntro("boss");
     // 選角畫面閒著時才預抓待機片；離開就完全停手
     // 首頁／人數頁：網路完全閒著，早點開始抓（首頁讓 BGM 與背景圖先走）。
     // 選角頁：玩家正在點角色，要等他真的停下來才補（見 stopPickWarm）。
@@ -507,6 +509,8 @@
   const pickWarmDone = new Set();  // 這次載入已抓完的角色，換畫面重啟時不重抓
   let pickWarmCtrl = null;
   let pickWarmTimer = null;
+  // 魔王降臨片是否已存成 Blob（排在 14 支待機片之後，見 startPickWarm）
+  let arrivalWarmDone = false;
 
   /**
    * 停止背景預抓，`resumeMs` 之後再試。
@@ -647,6 +651,30 @@
         } else if (token !== pickWarmToken) {
           return;                                // 是被中止的，交給計時器重啟
         }
+      }
+
+      /**
+       * 14 支待機片都抓完之後，**接著抓魔王降臨片**。
+       *
+       * 為什麼放這裡而不是模式頁：降臨片 1386KB，在睿哥約 130KB/s 的線上要
+       * 10.7 秒，而模式頁通常只停留兩三秒 —— 實測整段降臨花了 13 秒
+       * （影片本身才 6 秒，其餘都在等，畫面靠 poster 頂著）。
+       * 選角畫面的停留長得多（2〜4 位玩家各挑幾秒），而且待機片抓完之後
+       * 那條線就閒著，正好補這一支。
+       *
+       * **排在最後面，絕不跟待機片搶**（睿哥最早抱怨的就是選角卡）；
+       * 一樣過 `warmLineFree()` 閘門與「同時只有一支在飛」的限制。
+       */
+      if (arrivalWarmDone || token !== pickWarmToken || pickWarmCtrl) return;
+      if (!WARM_OK_SCREENS.has(document.body.dataset.screen) || !warmLineFree()) return;
+      const arrivalCtrl = new AbortController();
+      pickWarmCtrl = arrivalCtrl;
+      try {
+        if (await vp.storeBlob(vp.versioned(BOSS_ARRIVAL.src), arrivalCtrl.signal)) {
+          arrivalWarmDone = true;
+        }
+      } finally {
+        if (pickWarmCtrl === arrivalCtrl) pickWarmCtrl = null;
       }
     })();
   }
@@ -1426,21 +1454,30 @@
     arrivalPrefetch = null;
   }
 
-  function prefetchArrivalClip() {
-    if (arrivalPrefetch) return;
-    const pick = BOSS_ARRIVAL;
-    try {
-      const url = pick.src;
-      const el = document.createElement("video");
-      el.preload = "auto";
-      el.muted = true;
-      el.playsInline = true;
-      el.src = window.HF_VideoPlayer?.versioned
-        ? window.HF_VideoPlayer.versioned(url)
-        : url;
-      try { el.load(); } catch (_) {}
-      arrivalPrefetch = el;
-    } catch (_) {}
+  /** 三個模式各自的開場片。`seedRun` 定案之後就知道要預抓哪一支。 */
+  const STAGE_INTRO_BY_MODE = {
+    boss: BOSS_ARRIVAL.src,
+    doom: BOSS_ARRIVAL.src,
+    order: "assets/videos/mobile/order/intro.mp4",
+    teams: "assets/videos/mobile/teams/intro.mp4",
+  };
+
+  /**
+   * 預抓開場片。**存成 Blob，不要用隱藏的 `<video preload>`。**
+   *
+   * 舊版是建一顆隱藏的 `<video preload="auto">` —— v1.88 已經量過那樣
+   * **不會被真正播放的元素重用**（第二顆元素照樣跟伺服器重抓），
+   * 等於白佔一個解碼器。改成 `storeBlob()` 把位元組留著，
+   * `playStageClip()` 再透過 `resolveSrc()` 直接吃本機的 blob。
+   *
+   * 這是把魔王降臨拉回高畫質（862KB→1386KB）的前提：檔案大 61%，
+   * 但因為預抓真的生效，上場時不必再等網路。
+   */
+  function prefetchStageIntro(mode) {
+    const url = STAGE_INTRO_BY_MODE[mode] || BOSS_ARRIVAL.src;
+    const vp = window.HF_VideoPlayer;
+    if (!vp?.storeBlob || !vp?.versioned) return;
+    try { vp.storeBlob(vp.versioned(url)); } catch (_) {}
   }
 
   function clearAttackPrefetch() {
@@ -1459,9 +1496,20 @@
       if (opts.poster) video.poster = opts.poster;
       // 橫式素材要 contain，不然直向舞台的 cover 會把兩側裁掉
       video.style.objectFit = opts.fit || "";
-      video.src = window.HF_VideoPlayer?.versioned
-        ? window.HF_VideoPlayer.versioned(url)
-        : url;
+      /**
+       * ⚠️ **一定要經過 `resolveSrc()`。**
+       *
+       * 舊版直接設 `video.src = versioned(url)`，**完全吃不到預抓** ——
+       * v1.88 實測過：用隱藏 `<video preload="auto">` 預熱之後，真正播放的
+       * 那顆元素**還是會跟伺服器重抓**。所以魔王降臨那支即使「預抓過」，
+       * 上場時仍是從頭下載 —— 就是下面註解寫的「約 4〜5 秒全黑」的來源。
+       *
+       * `resolveSrc()` 把網址換成本機已握著的 `blob:`（沒有就原樣回傳），
+       * 跟選角待機片走同一套已驗證的機制。
+       */
+      const vpForSrc = window.HF_VideoPlayer;
+      const wantedSrc = vpForSrc?.versioned ? vpForSrc.versioned(url) : url;
+      video.src = vpForSrc?.resolveSrc ? vpForSrc.resolveSrc(wantedSrc) : wantedSrc;
       video.preload = "auto";
       video.loop = false;
       video.muted = true;
@@ -1793,8 +1841,9 @@
     });
     // 「再來一局」不經過模式頁；一定先由 seedRun 把公平結果完整定案，
     // 才補回唯一惡魔的降臨片預熱。媒體下載只服務演出，不參與 RNG。
-    if (!arrivalPrefetch) prefetchArrivalClip();
     const result = state.run.result || {};
+    // 定案之後才知道是哪個模式 —— 只預抓真正要播的那一支開場片
+    prefetchStageIntro(result.mode);
     const battleMode = result.mode === "boss" || result.mode === "doom";
     const winnerId = result.winner?.heroId || result.survivor?.heroId || null;
     window.HF_Audio?.preloadHeroes?.(
@@ -1960,7 +2009,7 @@
        *
        * 睿哥 2026-08-17 回報「影片超卡的，連選擇角色影片也跑不出來了」，
        * 這是其中一個原因：`show("mode")` 會**投機預抓**一支 0.6–1.4MB 的魔王降臨片
-       *（見 `prefetchArrivalClip`），但原本要等整段演出跑完的 `finally` 才釋放。
+       *（見 `prefetchStageIntro`），但原本要等整段演出跑完的 `finally` 才釋放。
        * 於是玩命運分隊／命運排序時，那支**用不到**的降臨片會跟這個模式自己的
        * 開場影片**同時搶頻寬**，4G 上兩邊都慢，開場片等不到就緒就被跳過。
        *

@@ -1382,9 +1382,20 @@ window.HF_VideoPlayer = (() => {
     };
   }
 
+  /**
+   * 把一個正規網址換成「本機已經握著的 blob」——沒有就原樣回傳。
+   *
+   * 給 `game.js` 的演出舞台用（`playStageClip`）。選角那條路徑是
+   * `setSource()` 自己呼叫 `blobSrc()`，但舞台片是 game.js 直接設
+   * `video.src`，不經過這裡就永遠吃不到預抓。
+   */
+  function resolveSrc(src) {
+    return blobSrc(src);
+  }
+
   // fullyBuffered 給 game.js 的背景預抓當閘門用（見 warmLineFree()）
   return {
     create, loadManifest, videoUrl, versioned, storeBlob, hasBlob,
-    fullyBuffered, setWaitWarmProbe,
+    fullyBuffered, setWaitWarmProbe, resolveSrc,
   };
 })();
