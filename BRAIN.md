@@ -468,6 +468,24 @@ v1.102／v1.103 把 final 與 attack 還原到 CRF 29，**victory 被漏掉**，
 （見下方「雲端測不到的四件事」第 3 項）。灌入上 59px／下 34px 才量得到：
 `375×667 切 2.9px`、`360×640 切 14.9px`。**版面問題一律先灌安全區再說。**
 
+### ㉗ iOS Safari 忽略 `<a download>`，存圖要走 `navigator.share`
+
+`<a download>` ＋ `canvas.toDataURL()` 在 iPhone 上**按下去什麼都不會發生**
+（睿哥 2026-09-12：「命運卷軸沒辦法下載」）。
+
+三層退路，由好到差：
+1. **`navigator.share({ files: [File] })`** —— iOS 15+ 支援，開系統分享表，
+   可以「儲存影像」到相簿、也能直接傳給別人。iPhone 上唯一可靠的路。
+2. `<a download>` ＋ `blob:` —— 桌機。用 blob 不要用 dataURL（省記憶體）。
+3. `window.open(dataURL)` —— 讓使用者長按儲存。
+
+⚠️ **PNG 一定要事先備好。** `navigator.share()` 要求使用者手勢仍有效，
+而 `canvas.toBlob()` 是非同步的 —— 在 click handler 裡先 `await` 它，
+**手勢就過期了，iOS 會直接拒絕**。要在畫完圖那一刻就 `toBlob()` 存起來，
+按鈕按下時同步取用。
+
+使用者自己取消分享會丟 `AbortError`，那不是錯誤，別再往下跳別的視窗。
+
 ## 雲端 session 測不到的四件事
 
 **別把「Chromium 上沒問題」當成沒問題。** 這四項每一項都造成過誤判：

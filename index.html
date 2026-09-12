@@ -85,7 +85,7 @@
           而且開著不重整就永遠不會重抓），所有 ?v= 都不會生效 ——
           那時這行會停在舊版本號，或整行不存在。**改版時記得改這裡。**
         -->
-        <p class="build-stamp" id="build-stamp">v1.109 · 0912-1420</p>
+        <p class="build-stamp" id="build-stamp">v1.110 · 0912-1540</p>
       </div>
     </section>
 
@@ -309,7 +309,7 @@
         </div>
         <div class="row wrap">
           <button class="btn gold" id="btn-doom">抽懲罰任務</button>
-          <button class="btn ghost" id="btn-scroll">命運卷軸</button>
+          <button class="btn ghost" id="btn-scroll">分享結果</button>
           <button class="btn ghost" id="btn-stats">今晚戰績</button>
           <button class="btn primary" id="btn-replay">再來一局</button>
           <button class="btn ghost" data-go="mode">換模式</button>
@@ -359,11 +359,11 @@
 
     <div id="modal-scroll" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="scroll-title">
       <div class="card panel scroll-panel">
-        <h2 id="scroll-title" class="sr-only">命運卷軸</h2>
+        <h2 id="scroll-title" class="sr-only">分享結果</h2>
         <canvas id="scroll-canvas" width="1" height="1" data-export-width="720" data-export-height="1080"></canvas>
-        <p class="scroll-hint">長按圖片可儲存，或直接截圖分享</p>
+        <p class="scroll-hint">按「分享圖片」可存到相簿或傳給朋友</p>
         <div class="row">
-          <button class="btn ghost sm" id="scroll-save">下載圖片</button>
+          <button class="btn ghost sm" id="scroll-save">分享圖片</button>
           <button class="btn primary" id="scroll-close">關閉</button>
         </div>
       </div>
@@ -396,7 +396,7 @@
   <script src="js/videoPlayer.js?v=56"></script>
   <script src="js/audioDirector.js?v=25"></script>
   <script src="js/victoryFilm.js?v=13"></script>
-  <script src="js/game.js?v=52"></script>
+  <script src="js/game.js?v=53"></script>
   <script>
     /**
      * 註冊 Service Worker（PWA 快取層，見 sw.js 檔頭）。

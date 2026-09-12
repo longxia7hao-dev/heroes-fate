@@ -2852,8 +2852,9 @@
     show("result");
   }
 
-  /* ---- 命運卷軸：把結果畫成可截圖分享的直式圖卡 ---- */
+  /* ---- 分享結果：把結果畫成可分享的直式圖卡 ---- */
   let lastDoomText = "";
+  let shareBlob = null;   // 卷軸畫完就先備好的 PNG，見 drawFateScroll 結尾
 
   function loadImage(src) {
     return new Promise((resolve) => {
@@ -3018,6 +3019,19 @@
       W / 2,
       H - 60
     );
+
+    /**
+     * **畫完就先把 PNG 備好。**
+     *
+     * `navigator.share()` 需要「使用者手勢還有效」才准開分享表，而
+     * `canvas.toBlob()` 是非同步的 —— 在 click handler 裡先 `await` 它，
+     * 手勢就過期了，iOS 會直接拒絕。所以在這裡先做好放著，
+     * 按鈕按下去時同步拿。
+     */
+    shareBlob = null;
+    try {
+      canvas.toBlob((b) => { shareBlob = b; }, "image/png");
+    } catch (_) {}
   }
 
   /** 懲罰／任務：抽完誰之後，再抽要做什麼（與勝負 RNG 完全分離） */
@@ -3299,15 +3313,54 @@
   on($("#scroll-close"), "click", () =>
     $("#modal-scroll")?.classList.add("hidden")
   );
-  on($("#scroll-save"), "click", () => {
+  /**
+   * 存圖／分享。**舊版在 iOS 上完全沒反應。**
+   *
+   * 舊寫法是 `<a download>` ＋ `canvas.toDataURL()` ——
+   * **iOS Safari 完全忽略 `download` 屬性**，那一下等於什麼都沒做
+   * （睿哥 2026-09-12：「命運卷軸沒辦法下載」）。
+   *
+   * 三層退路，由好到差：
+   *   ① `navigator.share({ files })`：iOS 15+ 支援，開系統分享表，
+   *      可以「儲存影像」到照片、也能直接傳給別人。**這是 iPhone 上唯一可靠的路。**
+   *   ② `<a download>` ＋ `blob:`：桌機瀏覽器走這條（比 dataURL 省記憶體）。
+   *   ③ 開新分頁顯示這張圖，讓使用者長按儲存。
+   *
+   * ⚠️ `shareBlob` 必須**事先**在 `drawFateScroll()` 裡備好 ——
+   * 在這裡 `await canvas.toBlob()` 會讓使用者手勢過期，iOS 就不准開分享表了。
+   */
+  on($("#scroll-save"), "click", async () => {
     const canvas = $("#scroll-canvas");
     if (!canvas) return;
+    const name = `heroes-fate-${Date.now()}.png`;
+
+    if (shareBlob && typeof File === "function" && navigator.canShare) {
+      try {
+        const file = new File([shareBlob], name, { type: "image/png" });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: "英雄命運" });
+          return;
+        }
+      } catch (err) {
+        // 使用者自己取消分享不是錯誤，不要再往下跳別的視窗
+        if (err && err.name === "AbortError") return;
+      }
+    }
+
     try {
-      const a = document.createElement("a");
-      a.download = `heroes-fate-${Date.now()}.png`;
-      a.href = canvas.toDataURL("image/png");
-      a.click();
+      const blob = shareBlob || await new Promise((r) => canvas.toBlob(r, "image/png"));
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.download = name;
+        a.href = url;
+        a.click();
+        setTimeout(() => { try { URL.revokeObjectURL(url); } catch (_) {} }, 8000);
+        return;
+      }
     } catch (_) {}
+
+    try { window.open(canvas.toDataURL("image/png"), "_blank"); } catch (_) {}
   });
 
   on($("#btn-stats"), "click", () => {
