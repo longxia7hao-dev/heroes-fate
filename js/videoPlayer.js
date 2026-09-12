@@ -1279,13 +1279,27 @@ window.HF_VideoPlayer = (() => {
         target.addEventListener("ended", onEnded, { once: true });
         target.addEventListener("error", onError, { once: true });
 
-        // iOS 同時只能播一支，先把另一顆停掉。
-        videos.forEach((el) => {
-          if (el !== target) {
+        /**
+         * ⚠️ **不要在這裡就把等待片收掉。**
+         *
+         * 舊版一設好來源就 `pause()` ＋ 拿掉 `is-active`，但確認片還要等
+         * `loadeddata` 才播得了 —— 中間舞台整個是空的。睿哥 2026-09-12 的
+         * 錄影逐幀量到**約 670ms 的空框**（只剩「鎖定中…」徽章），
+         * 他的原話：「選完角色後可以不要黑頻，直接進入確認動畫嗎」。
+         *
+         * 「iOS 同時只能播一支」這個限制指的是**播放**，所以只要在真正
+         * `play()` 確認片之前把另一顆停掉就滿足了 —— 見下面 `releaseOthers()`。
+         * 在那之前讓等待片繼續播，畫面就不會空。
+         *
+         * 確認片載入這段的解碼成本：v1.95 起 confirm 會被存成 Blob
+         * （`primeConfirmWhenSafe`），多半是本機供應，不必等網路。
+         */
+        const releaseOthers = () => {
+          videos.forEach((el) => {
+            if (el === target) return;
             try { el.pause(); } catch (_) {}
-            el.classList.remove("is-active");
-          }
-        });
+          });
+        };
 
         if (target.readyState < 2) {
           await waitEvent(target, "loadeddata", 2400);
@@ -1305,6 +1319,9 @@ window.HF_VideoPlayer = (() => {
         } catch (_) {}
 
         try {
+          // 真的要播了才停掉另一顆（iOS 一次只能播一支）。`activateVideo()`
+          // 會在同一刻把 `is-active` 換過去，所以畫面不會出現空檔。
+          releaseOthers();
           const p = target.play();
           if (p && typeof p.then === "function") await p;
           if (destroyed || token !== playToken || settled) return finish();
