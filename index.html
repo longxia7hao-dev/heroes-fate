@@ -33,7 +33,7 @@
   <!-- 介面提升層：疊在最後，專門處理 2026-08-14 視覺稿的金框／金屬按鈕語言。
        要退版把這一行拿掉即可，不影響 revamp.css。 -->
   <link rel="stylesheet" href="css/ornate.css?v=20" />
-  <link rel="stylesheet" href="css/aaa.css?v=29" />
+  <link rel="stylesheet" href="css/aaa.css?v=30" />
 </head>
 <body>
   <div id="app">
@@ -85,7 +85,7 @@
           而且開著不重整就永遠不會重抓），所有 ?v= 都不會生效 ——
           那時這行會停在舊版本號，或整行不存在。**改版時記得改這裡。**
         -->
-        <p class="build-stamp" id="build-stamp">v1.110 · 0912-1540</p>
+        <p class="build-stamp" id="build-stamp">v1.111 · 0912-1700</p>
       </div>
     </section>
 
@@ -180,21 +180,21 @@
             <span class="m-ico" aria-hidden="true">RAID</span>
             <span class="m-kicker">抽出一位</span>
             <span class="m-title">魔王討伐</span>
-            <span class="m-desc">全員集結、混戰、煙霧揭曉與專屬勝利短片</span>
+            <span class="m-desc">全員討伐魔王，隨機抽出唯一的勝利者</span>
             <span class="m-cta">進入戰場 →</span>
           </button>
           <button class="mode-card" data-mode="order">
             <span class="m-ico" aria-hidden="true">ORDER</span>
             <span class="m-kicker">決定順位</span>
             <span class="m-title">命運排序</span>
-            <span class="m-desc">依序揭曉每位英雄的命運順位</span>
+            <span class="m-desc">隨機決定每個人的先後順序</span>
             <span class="m-cta">開始排序 →</span>
           </button>
           <div class="mode-card mode-card-teams" data-mode-group="teams">
             <span class="m-ico" aria-hidden="true">TEAM</span>
             <span class="m-kicker">隨機分隊</span>
             <span class="m-title">命運分隊</span>
-            <span class="m-desc">洗牌後平均分隊，人數差最多一人</span>
+            <span class="m-desc">隨機平均分隊，人數最多差一人</span>
             <span class="team-count-row">
               <button type="button" class="btn tiny" data-mode="teams" data-teams="2">2 隊</button>
               <button type="button" class="btn tiny" data-mode="teams" data-teams="3">3 隊</button>

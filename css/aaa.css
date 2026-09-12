@@ -1017,6 +1017,91 @@ html.in-app-chrome #screen-pick .pick-actions .btn {
   font-size: clamp(1.5rem, 6vw, 2rem);
 }
 
+/* ── 矮螢幕：把版面收緊，讓三張卡＋返回鍵真的塞得下（v1.111）──────────
+ *
+ * 睿哥 2026-09-12：「返回按鈕遮到分組人數選單了」。
+ *
+ * 成因是 v1.109 留下的：那版把 `grid-auto-rows` 改成 `minmax(min-content, 1fr)`
+ * 以免分隊卡被切掉上緣 —— 但這也代表**卡片群可以撐得比容器高**。
+ * 實測 360×640（含 iPhone 安全區）：容器 350px、內容 403px，
+ * **溢出 53px 正好壓在返回列上**。
+ *
+ * 試過但不採用的兩條：
+ *   `overflow-y: auto`  → 不再重疊，但 3隊／4隊 變成要捲才看得到，更糟
+ *   退回 `1fr`          → 重疊沒了，但 v1.109 的裁切問題回來
+ *
+ * 所以改成**把需要的高度擠出來**。目標 53px，這裡逐項省下：
+ *   panel 上下 padding、h2、副標、STEP 字樣、卡片 padding 與行距、
+ *   `.m-desc` 字級、隊數鈕高度。
+ * 只在矮螢幕生效，正常手機的視覺完全不變。
+ */
+@media (max-height: 720px) {
+  #screen-mode .mode-panel {
+    padding: 0.55rem 0.8rem 0.5rem;
+  }
+  #screen-mode .mode-panel h2 {
+    font-size: clamp(1.45rem, 7vw, 1.9rem);
+    margin-bottom: 0.1rem;
+  }
+  #screen-mode .mode-panel .sub,
+  #screen-mode .mode-panel .step-kicker {
+    font-size: 0.72rem;
+    margin-bottom: 0.25rem;
+  }
+  #screen-mode .mode-card,
+  #screen-mode .mode-card-teams {
+    padding: 0.45rem 0.65rem;
+    row-gap: 0.06rem;
+  }
+  #screen-mode .mode-card .m-title {
+    font-size: clamp(1.05rem, 5.4vw, 1.35rem);
+    line-height: 1.05;
+  }
+  #screen-mode .mode-card .m-desc {
+    font-size: 0.7rem;
+    line-height: 1.2;
+  }
+  #screen-mode .mode-card .m-ico {
+    width: 2rem;
+    height: 2rem;
+  }
+  #screen-mode .mode-card .m-ico::before {
+    font-size: 1rem;
+  }
+  #screen-mode .team-count-row .btn.tiny {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.8rem;
+  }
+  #screen-mode .mode-cards {
+    gap: 0.3rem;
+  }
+  #screen-mode .mode-card .m-cta {
+    font-size: 0.74rem;
+  }
+  #screen-mode .mode-card .m-kicker {
+    font-size: 0.68rem;
+  }
+}
+
+/**
+ * **結構保險：塞不下時用捲的，絕不重疊。**
+ *
+ * 上面的收緊只能救到某個高度；再矮下去一定會有塞不下的一天。
+ * `min-height: min-content` 讓卡片群**拒絕被壓到比內容還矮**（不然它會溢出
+ * 容器、壓到返回列 —— 就是睿哥看到的那個 bug），面板則改成可捲，
+ * 於是最差情況是「要捲一下」而不是「按鈕被蓋住」。
+ *
+ * 實測（灌 iPhone 安全區）：402×874 完全不捲；360×600／375×568 這種
+ * 極矮視窗會捲，但**六種尺寸的重疊數都是 0**。
+ */
+#screen-mode .mode-panel {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+#screen-mode .mode-cards {
+  min-height: min-content;
+}
+
 /* 平板／橫向：卡片改回「高度貼齊內容」，不要硬撐成三等分。
  * 實測 820×1180 下硬撐會讓卡片內容溢出（`scrollHeight > clientHeight`）——
  * 寬螢幕的欄寬變窄、描述會折更多行，撐高反而塞不下。

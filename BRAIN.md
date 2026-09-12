@@ -464,6 +464,19 @@ v1.102／v1.103 把 final 與 attack 還原到 CRF 29，**victory 被漏掉**，
 解法：**`minmax(min-content, 1fr)`**。有空間照樣平分，
 但永遠不會被壓到比自己內容還矮。
 
+⚠️ **但這會換來另一個 bug（v1.111 修）**：卡片群既然不肯被壓縮，就會
+**撐得比容器高、溢出去壓到下面的「返回」列**（360×640：容器 350px、
+內容 403px、溢出 53px）。所以一定要配一組結構保險：
+
+    #screen-mode .mode-cards { min-height: min-content; }
+    #screen-mode .mode-panel { overflow-y: auto; }
+
+最差情況變成「要捲一下」而不是「按鈕被蓋住」。另外用
+`@media (max-height: 720px)` 把矮螢幕的版面收緊，讓常見機型連捲都不用。
+
+**通則：`overflow: hidden` ＋ 不能壓縮的內容 ＝ 不是裁掉就是壓到別人。
+兩個都要處理。**
+
 ⚠️ **這個 bug 在 headless 上重現不出來**，因為 `env(safe-area-inset-*)` 是 0
 （見下方「雲端測不到的四件事」第 3 項）。灌入上 59px／下 34px 才量得到：
 `375×667 切 2.9px`、`360×640 切 14.9px`。**版面問題一律先灌安全區再說。**
