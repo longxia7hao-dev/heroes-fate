@@ -933,7 +933,25 @@ html.in-app-chrome #screen-pick .pick-actions .btn {
 #screen-mode .mode-cards {
   flex: 1 1 auto;
   min-height: 0;
-  grid-auto-rows: 1fr;               /* 三張卡平分剩下的高度 */
+  /**
+   * ⚠️ **不能用純 `1fr`。**
+   *
+   * `1fr` 會強迫三張卡等高，但**命運分隊那張多一排隊數按鈕**（2隊／3隊／4隊）——
+   * 螢幕一矮，它分到的高度就裝不下自己的內容。卡片是
+   * `align-content: center` ＋ `overflow: hidden`，所以內容上下各溢出一半、
+   * **上緣的「隨機分隊」就被切掉**（睿哥 2026-09-12：「這個介面被切到了」）。
+   *
+   * 實測（灌入 iPhone 的 `env(safe-area-inset-*)`：上 59px、下 34px。
+   * ⚠️ headless 預設全是 0，不灌就量不到，見 BRAIN.md）：
+   *
+   *              現況 `1fr`                改成 `minmax(min-content,1fr)`
+   *   375×667    kicker 被切 2.9px         不被切（低於卡頂 9px）
+   *   360×640    kicker 被切 14.9px        不被切（低於卡頂 9px）
+   *
+   * `minmax(min-content, 1fr)`：有空間時照樣三張平分，**但永遠不會壓到比
+   * 自己內容還矮**。四種尺寸實測頁面都不溢出、隊數按鈕都還看得見。
+   */
+  grid-auto-rows: minmax(min-content, 1fr);
   gap: clamp(0.45rem, 1.5vh, 0.85rem);
   align-content: stretch;
 }
