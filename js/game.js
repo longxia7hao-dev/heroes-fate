@@ -1865,10 +1865,22 @@
      * ⚠️ 公平性不受影響：`seedRun()` 已經把結果完整定案了，**媒體下載只服務
      * 演出、不參與 RNG**（舊版本來就在揭曉之前預抓勝者的 final，只是更晚）。
      */
-    if (battleMode && winnerId) {
+    if (winnerId) {
       window.HF_VideoPlayer?.loadManifest?.().then(() => {
-        const url = window.HF_VideoPlayer?.videoUrl?.(winnerId, "final", "demon");
-        if (url) warmMediaBlob(url);
+        const vp = window.HF_VideoPlayer;
+        // final 先抓（它排在勝利片前面播），勝利片緊接在後
+        if (battleMode) {
+          const finalUrl = vp?.videoUrl?.(winnerId, "final", "demon");
+          if (finalUrl) warmMediaBlob(finalUrl);
+        }
+        /**
+         * 勝利片也要預抓。v1.108 把它還原到 CRF 29（碼率 +45%、約 763KB），
+         * 而它**原本從來沒有被預抓過** —— 結果頁與勝利影片兩個播放點都是
+         * 當場跟伺服器要。從這裡開始抓，中間隔著整段演出（降臨＋攻擊＋
+         * 命運一擊＋final 約 35 秒），綽綽有餘。
+         */
+        const victoryUrl = vp?.videoUrl?.(winnerId, "victory");
+        if (victoryUrl) warmMediaBlob(victoryUrl);
       }).catch(() => {});
     }
     window.HF_Audio?.preloadHeroes?.(
@@ -2682,7 +2694,7 @@
       if (token !== resultPortraitGen) return;
       const url = window.HF_VideoPlayer.videoUrl(heroId, "victory");
       if (!url) return;
-      video.src = window.HF_VideoPlayer.versioned(url);
+      video.src = mediaSrc(url);   // 吃得到預抓的 blob 就用本機的
       video.muted = true;
       video.loop = true;
       video.playsInline = true;

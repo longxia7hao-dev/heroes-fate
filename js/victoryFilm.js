@@ -112,9 +112,10 @@ window.HF_VictoryFilm = (() => {
         // 首幀圖與影片同比例，載入中先頂著，避免黑畫面
         video.poster = `assets/videos/poster/victory/${heroId}.jpg?v=2`;
       }
-      video.src = window.HF_VideoPlayer?.versioned
-        ? window.HF_VideoPlayer.versioned(videoUrl)
-        : videoUrl;
+      // 吃得到預抓的 blob 就用本機的（勝利片在 seedRun 定案時就開始存）
+      const vpV = window.HF_VideoPlayer;
+      const wantV = vpV?.versioned ? vpV.versioned(videoUrl) : videoUrl;
+      video.src = vpV?.resolveSrc ? vpV.resolveSrc(wantV) : wantV;
       video.loop = false;
       video.muted = true;
       video.playsInline = true;

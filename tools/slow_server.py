@@ -45,7 +45,7 @@ class Handler(BaseHTTPRequestHandler):
         # 支援 wait/<id>.mp4 與開場片 boss|order|teams/<name>.mp4 ——
         # 後者是驗魔王降臨／模式開場那段演出用的（v1.102 起）。
         if CFG["webm"]:
-            m = re.search(r"/(wait|confirm|boss|order|teams|attack|final)/([a-z_]+)\.mp4$", path)
+            m = re.search(r"/(wait|confirm|boss|order|teams|attack|final|victory)/([a-z_]+)\.mp4$", path)
             if m:
                 kind, stem = m.group(1), m.group(2)
                 base = pathlib.Path(CFG["webm"])
