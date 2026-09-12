@@ -3310,9 +3310,18 @@
     $("#modal-scroll")?.classList.remove("hidden");
     await drawFateScroll();
   });
-  on($("#scroll-close"), "click", () =>
-    $("#modal-scroll")?.classList.add("hidden")
-  );
+  /**
+   * 收掉分享卡片。
+   *
+   * 睿哥 2026-09-12：「停在這個畫面太奇怪了」——
+   * 分享表關掉之後還卡在同一張卡上、要再按一次「關閉」。
+   * **分享成功就自己收掉**，回到結果頁（那裡才有「再來一局」）。
+   * ⚠️ 使用者自己取消分享（`AbortError`）**不會**走到這裡，卡片留著讓他重試。
+   */
+  function closeScroll() {
+    $("#modal-scroll")?.classList.add("hidden");
+  }
+  on($("#scroll-close"), "click", closeScroll);
   /**
    * 存圖／分享。**舊版在 iOS 上完全沒反應。**
    *
@@ -3339,6 +3348,7 @@
         const file = new File([shareBlob], name, { type: "image/png" });
         if (navigator.canShare({ files: [file] })) {
           await navigator.share({ files: [file], title: "英雄命運" });
+          closeScroll();
           return;
         }
       } catch (err) {
@@ -3356,6 +3366,7 @@
         a.href = url;
         a.click();
         setTimeout(() => { try { URL.revokeObjectURL(url); } catch (_) {} }, 8000);
+        closeScroll();
         return;
       }
     } catch (_) {}
