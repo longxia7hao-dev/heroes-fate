@@ -11,6 +11,11 @@ Service Worker 會整個播不動），所以「把檔案變小」是目前唯�
 
 **保護機制**：壓完比原本大就丟掉、保留原檔（粒子多的片子有可能發生）。
 
+**⚠️ 重壓一定會讓 poster 過期**（poster 是影片首幀，換了編碼就對不上）。
+2026-09-11 整庫重壓後忘了這件事，45 張 poster 全部停在舊編碼的那一格，
+其中三支剛好是**閉眼**，直接被畫進「分享結果」卡片。現在收工前會自動
+呼叫 `tools/sync_posters.py` 重製，`--dry-run` 不會動。
+
 用法：
 
     python3 tools/recompress_videos.py --crf 32           # 全部
@@ -123,6 +128,17 @@ def main() -> None:
         return
     print(f"\n合計 {tot_b/1048576:.1f}MB → {tot_a/1048576:.1f}MB（−{(1-tot_a/tot_b)*100:.0f}%）"
           + (f"，其中 {kept} 支保留原檔" if kept else ""))
+
+    # 換了編碼，poster（影片首幀）就一定過期 —— 不重製會在影片出現前閃一格舊的，
+    # 而 victory 的 poster 還會被「分享結果」卡片拿去當主圖。
+    print("\n同步 poster：")
+    r = subprocess.run([sys.executable, str(ROOT / "tools" / "sync_posters.py")],
+                       capture_output=True, text=True)
+    sys.stdout.write(r.stdout)
+    if r.returncode != 0:
+        sys.stderr.write(r.stderr)
+        raise SystemExit("poster 同步失敗 —— 收工前請手動跑 tools/sync_posters.py")
+
     print("\n記得跑：python3 tools/gen_asset_versions.py，並把 MEDIA_VERSION 與版本印記 +1")
 
 

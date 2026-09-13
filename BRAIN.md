@@ -499,6 +499,38 @@ v1.102／v1.103 把 final 與 attack 還原到 CRF 29，**victory 被漏掉**，
 
 使用者自己取消分享會丟 `AbortError`，那不是錯誤，別再往下跳別的視窗。
 
+### ㉘ 重編影片會讓 poster 整批過期 —— 而且沒有任何工具會提醒你
+
+poster 是「影片載入前先頂著的那一格」，所以它**必須是該支影片現在的首幀**。
+但 `tools/recompress_videos.py` **只換影片、完全不碰 poster**。
+
+2026-09-11（v1.101）整庫重壓 CRF 32 之後，45 張 poster 全部還停在 **2026-08-13**
+從舊編碼抽出來的畫面。後果有兩層，第二層才是被抓包的那個：
+
+1. 每一張 poster 都跟影片首幀對不上 → 影片一開始播會**跳一格**。
+2. **「分享結果」卡片直接畫 `poster/victory/<id>.jpg` 當主圖** ——
+   dark_mage／paladin／princess 剛好抽到眨眼的那一格，
+   睿哥拿到的分享圖角色是**閉著眼睛**的（2026-09-13：「角色剛好卡剛好在閉眼的狀態」）。
+
+**別急著去修那三張圖。** 先問「poster 是不是整批都舊了」——
+把現行影片的 0.1s 那格抽出來跟 poster 並排放大比，一眼就看得出來是不是同一次編碼。
+那三支的現行影片首幀**都是張著眼的**，問題從來不在影片。
+
+現在有工具了：
+
+```bash
+python3 tools/sync_posters.py            # 從現行影片重製全部
+python3 tools/sync_posters.py --check    # 只比對，有落差 exit 1（收工前跑）
+```
+
+`recompress_videos.py` 壓完會自動呼叫它（`--dry-run` 不會）。
+參數必須跟 `replace_hero_videos.py`／`upgrade_from_source.py` 的 `make_poster()`
+一致（`-ss 0.1`、`scale=400:-2`、`-q:v 4`），否則每跑一次就白白改動 45 個檔案。
+
+**⚠️ 重製了不等於看得到。** 同一次還揪出兩個吃不到 `HF_ASSET_V` 的地方：
+`js/game.js` 的分享卡用**裸路徑**、`js/victoryFilm.js` 寫死 `?v=2`。
+兩個都會讓手機從快取拿回閉眼那張 —— **改素材時要連著問「載它的那行有沒有版本號」**。
+
 ## 雲端 session 測不到的四件事
 
 **別把「Chromium 上沒問題」當成沒問題。** 這四項每一項都造成過誤判：
@@ -522,6 +554,7 @@ python3 tools/replace_hero_videos.py <id> --finish --wait/--confirm/--attack/--f
         # 換角色影片：轉檔＋重製 poster＋版本號全套。--scan 可列出 Drive 素材夾
 python3 tools/recompress_videos.py --crf 32 [--kinds wait]   # 整批重壓（壓不贏會保留原檔）
 python3 tools/gen_asset_versions.py                          # 重算逐檔雜湊表
+python3 tools/sync_posters.py [--check]                      # poster 對齊現行影片（換片／重壓後必跑）
 python3 tools/sync_build.py                                  # 版本印記同步到 build.txt
 python3 tools/slow_server.py --port 8901 --kbps 130 --webm-dir <dir>   # 測試伺服器
 ```

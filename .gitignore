@@ -14,3 +14,7 @@ assets/ref_battle.mp4
 ._*
 __pycache__/
 *.pyc
+
+# 本機測試用，不進版控（tools/test_pick_runtime.cjs 需要 playwright）
+node_modules/
+package-lock.json

@@ -71,6 +71,10 @@ cd /Users/longxia7hao/Heroes_Fate && python3 -m http.server 8888 --bind 0.0.0.0
      `game.js` 會以 `no-store` 抓它跟頁面比對，不一樣就跳「有新版本 · 點一下更新」。
      **忘了跑，玩家就永遠收不到更新提示。**
 2. **換了影片就要重製 poster**（`assets/videos/poster/{attack,victory,final}/`、`poster/boss/arrival.jpg`）。切入層在影片載入前顯示的是 poster 首幀，忘了重製就會「先閃一張舊角色圖」。
+   **`recompress_videos.py` 整批重壓也算換影片** —— 2026-09-11 那次沒重製，45 張 poster 全部停在舊編碼，
+   其中三支剛好是**閉眼**，還被「分享結果」卡片畫成主圖（`poster/victory/<id>.jpg` 就是那張卡的立繪）。
+   現在直接跑 **`python3 tools/sync_posters.py`**（`--check` 只比對、有落差 exit 1，收工前跑）。
+   重製完別忘了**載它的那行要有版本號**：走 `artUrl()` 吃 `HF_ASSET_V`，寫死 `?v=2` 或裸路徑都會讓手機從快取拿到舊圖。
 3. **演出流程有 early return，加新段落要看清楚位置**。`presentBossRaid()` 曾因為 `if (isDoom) { … return; }` 排在播 final 之前，導致命運審判模式整段最後一擊從來沒播過。加新 ACT 前先確認它在所有 return 之前。
 
 ## 雲端 session 測不到的三件事（別把「Chromium 上沒問題」當成沒問題）

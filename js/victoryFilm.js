@@ -109,8 +109,11 @@ window.HF_VictoryFilm = (() => {
 
     if (videoUrl) {
       if (sourceKind === "victory") {
-        // 首幀圖與影片同比例，載入中先頂著，避免黑畫面
-        video.poster = `assets/videos/poster/victory/${heroId}.jpg?v=2`;
+        // 首幀圖與影片同比例，載入中先頂著，避免黑畫面。
+        // ⚠️ 一定要走 HF_ASSET_V 逐檔雜湊：寫死的 `?v=2` 會讓重製過的 poster
+        //    永遠卡在瀏覽器快取裡（2026-09-13 的閉眼 poster 就是這樣留下來的）。
+        const posterPath = `assets/videos/poster/victory/${heroId}.jpg`;
+        video.poster = `${posterPath}?v=${window.HF_ASSET_V?.[posterPath] || 2}`;
       }
       // 吃得到預抓的 blob 就用本機的（勝利片在 seedRun 定案時就開始存）
       const vpV = window.HF_VideoPlayer;

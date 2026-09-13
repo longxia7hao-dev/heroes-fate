@@ -2955,7 +2955,7 @@
     // 立繪
     if (mainHero) {
       const img =
-        (await loadImage(`assets/videos/poster/victory/${mainHero.id}.jpg`)) ||
+        (await loadImage(artUrl(`assets/videos/poster/victory/${mainHero.id}.jpg`))) ||
         (await loadImage(heroImg(mainHero.id)));
       if (img) {
         const boxW = 420;
