@@ -313,7 +313,7 @@ state = {
 ### 9.6 多 Agent 協作
 
 - 改完更新 `PROJECT_NOTES.md` 的「目前狀態」與「變更日誌」
-- 遵守使用者 `CLAUDE.md`：非交易系統專案用 `PROJECT_NOTES`，不寫 `SHARED_BRAIN.md`
+- 遵守使用者 `CLAUDE.md`：本專案以 `PROJECT_NOTES.md` 記錄進度
 - 同檔案避免與其他 Agent 並行大改
 
 ---
